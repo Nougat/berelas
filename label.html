@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Laptop Preisschilder Generator</title>
+
+    <!-- Tailwind -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+
+    <!-- Alpine.js -->
+    <script defer src="https://unpkg.com/alpinejs" defer></script>
+
+
+    <style>
+
+
+        /* Label-Vorschau und Druck-Styling */
+        #label-preview {
+            width: 89mm;
+            height: 36mm;
+            background: white;
+            border: 1px solid #ccc;
+            display: flex;
+            box-sizing: border-box;
+            position: relative;
+            overflow: hidden;
+            padding: 2.5mm 4mm; 
+        }
+        
+        .logo-section {
+            width: 23mm;
+            border-right: 2px solid black;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding-right: 2mm;
+            box-sizing: border-box;
+        }
+        .logo-section img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        .specs-section {
+            flex-grow: 1;
+            /* ANGEPASST: 3mm oben, 3mm rechts, 0 unten, 6mm links */
+            padding: 3mm 2mm 0 6mm;
+            display: flex;
+            flex-direction: column;
+            justify-content: center; 
+            font-size: 13.5px; 
+            line-height: 1.25;
+        }
+        .specs-section span {
+            display: block;
+            min-height: 1.25em;
+        }
+        .price {
+            margin-top: 3px;
+            text-align: right;
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        .model-section {
+            width: 0mm;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            writing-mode: vertical-rl;
+            transform: rotate(180deg);
+            font-size: 19px;
+            text-align: center;
+            padding-top: 0mm;
+	    padding-right: 10mm;
+            box-sizing: border-box;
+            white-space: nowrap;
+        }
+
+        @media print {
+            body { margin: 0; padding: 0; background: white; }
+            .form-container { display: none; }
+            #label-preview {
+                border: none;
+                width: 89mm;
+                height: 36mm;
+            }
+            @page {
+                size: 89mm 36mm landscape;
+                margin: 0;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 p-4 font-sans" x-data="label">
+
+    <!-- Eingabeformular, wird beim Drucken ausgeblendet -->
+    <div class="bg-white p-4 max-w-md mb-4 rounded-lg shadow-lg print:hidden">
+        <h2 class="text-xl font-bold mb-2">Label Daten eingeben</h2>
+        
+        <!-- Modell -->
+        <div class="my-4">
+            <label class="block mb-2 font-bold">Modell (seitlich)</label>
+            <input type="text" placeholder="z.B. T480" x-model="model" class="w-full p-2 rounded-sm border">
+        </div>
+
+
+        <!-- CPU -->
+        <div class="my-4">
+            <label class="block mb-2 font-bold">CPU</label>
+            <input type="text" placeholder="z.B. i5-8350u" x-model="cpu" class="w-full p-2 rounded-sm border">
+        </div>
+
+
+        <!-- RAM -->
+        <div class="my-4">
+            <label class="block mb-2 font-bold">RAM</label>
+            <div class="inline-flex rounded-lg border border-gray-300 overflow-hidden">
+                <template x-for="size in ramOptions" :key="size">
+                    <button 
+                        @click="ram = size"
+                        class="px-4 py-2 transition"
+                        :class="ram === size ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'">
+                        <span x-text="size + 'GB'"></span>
+                    </button>
+                </template>
+            </div>
+        </div>
+
+
+        <!-- SSD -->
+        <div class="my-4">
+            <label class="block mb-2 font-bold">SSD</label>
+            <div class="inline-flex rounded-lg border border-gray-300 overflow-hidden">
+                <template x-for="size in ssdOptions" :key="size">
+                    <button 
+                        @click="ssd = size"
+                        class="px-4 py-2 transition"
+                        :class="ssd === size ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'">
+                        <span x-text="size + 'GB'"></span>
+                    </button>
+                </template>
+            </div>
+        </div>
+
+
+        <!-- GPU -->
+        <div class="my-4">
+            <label class="block mb-2 font-bold">GPU (optional)</label>
+            <input type="text" placeholder="z.B. Intel UHD 620" class="w-full p-2 rounded-sm border">
+        </div>
+
+
+        <!-- Extras -->
+        <div class="my-4">
+            <label class="block mb-2 font-bold">Extras (Zeilenumbruch mit Komma)</label>
+            <input type="text" placeholder="z.B. Full-HD, Touchscreen, DVD" class="w-full p-2 rounded-sm border">
+        </div>
+
+
+        <!-- Preis -->
+        <div class="my-4">
+            <label class="block mb-2 font-bold">Preis (in €)</label>
+            <input type="text" placeholder="z.B. 700" class="w-full p-2 rounded-sm border">
+        </div>
+
+        <button onclick="window.print()" class="bg-blue-500 hover:bg-blue-700 hover:cursor-pointer text-white font-bold py-2 px-4 rounded w-full">
+            Etikett Drucken
+        </button>
+    </div>
+
+    <div id="label-preview">
+        <div class="logo-section">
+            <img src="logo.png" alt="Logo">
+        </div>
+        
+        <div class="specs-section">
+            <span x-text="cpu"></span>
+            <span x-text="'RAM: ' + ram + 'GB'"></span>
+            <span x-text="'SSD: ' + ssd + 'GB'"></span>
+            <span x-text="gpu" x-show="gpu"></span>
+            <span x-text="extras" x-show="extras"></span>
+            
+            <div class="price" id="out-price">,-€</div>
+        </div>
+        
+        <div class="model-section" x-text="model ? model : 'Modell'">
+        </div>
+    </div>
+
+    <script>
+
+
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('label', () => ({
+
+                model: null,
+                cpu: null,
+                ram: null,
+                ssd: null,
+                gpu: null,
+                extras: null,
+                price: null,
+
+                ramOptions: ['4', '8', '16', '32', '64', '128'],
+                ssdOptions: ['128', '256', '512', '1024', '2048'],
+
+            }))
+        });
+
+
+        function updateLabel() {
+
+
+
+            const outExtras = document.getElementById('out-extras');
+            if (extras.trim() !== '') {
+                const formattedExtras = extras.split(',').map(item => item.trim()).filter(item => item !== '').join('<br>');
+                outExtras.innerHTML = formattedExtras;
+                outExtras.style.display = 'block';
+            } else {
+                outExtras.style.display = 'none';
+            }
+        }
+        
+        updateLabel();
+    </script>
+</body>
+</html>

@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="de">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Großhandel</title>
+    
+    <!-- Tailwind -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Alpine -->
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+    <!-- PapaParse -->
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+</head>
+
+<body x-data="grosshandel()">
+
+    <div class="min-h-screen bg-gray-100 flex items-center justify-center p-6">
+
+        <div class="max-w-5xl w-full bg-white shadow-lg rounded-xl p-6">
+
+            <!-- Error -->
+            <template x-if="error">
+                <div x-text="error" class="text-2xl text-red-500"></div>
+            </template>
+
+            <!-- Headline -->
+            <div class="text-center mb-6" x-show="!data.length">
+                <h1 class="text-3xl font-bold text-gray-900">Großhandel</h1>
+                <p class="mt-2 text-gray-600">This page loads the Google Sheet data directly in browser Javascript.</p>
+            </div>
+
+            <!-- Load/Reload Button -->
+            <div class="mb-6 space-y-4">
+                <button id="loadButton" @click="loadSheet()" :disabled="loading" 
+                    class="w-full py-3 px-4  bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                    x-text="loading ? 'Loading...' : (data.length ? 'Reload sheet data' : 'Load sheet data')">
+                </button>
+            </div>
+
+            <!-- Search input and some simple filters -->
+            <div class="mb-6">
+                <input type="text" placeholder="Search..." x-model="filterValues.search" x-show="data.length"
+                    class="w-full border border-gray-300 rounded-lg py-2 px-4 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <label x-show="data.length" class="ml-2">
+                    <input type="checkbox" x-model="filterValues.comments" />
+                    Show only comments
+                </label>
+                <label x-show="data.length" class="ml-2">
+                    <input type="checkbox" x-model="filterValues.orphanPrices" />
+                    Show only orphan prices
+                </label>
+                <label x-show="data.length" class="ml-2">
+                    <input type="checkbox" x-model="filterValues.nonEmpty" />
+                    Show only non-empty
+                </label>
+                <label x-show="data.length" class="ml-2">
+                    <input type="checkbox" x-model="filterValues.kleinanzeigen">
+                    Show only Kleinanzeigen
+                </label>
+                <label x-show="data.length" class="ml-2">
+                    <input type="checkbox" x-model="filterValues.notListed">
+                    Show only not listed
+                </label>
+            </div>
+
+            <!-- number of rows -->
+            <span x-show="data.length" class="text-gray-700 text-sm mb-4 block" x-text="`showing ${filteredData.length} rows`"></span>
+
+            <!-- headers --> 
+            <span x-show="false" class="text-gray-700 text-sm mb-4 block" x-text="`Headers: ${headers.join(', ')}`"></span>
+
+            <!-- cards with data -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6" x-show="data.length">
+                <template x-for="item in filteredData" :key="item.id">
+                <article class="overflow-hidden rounded-3xl bg-white ring-1 ring-slate-200 shadow-sm transition hover:ring-blue-300 hover:shadow-xl">
+                    
+                    <!-- header -->
+                    <header class="bg-gradient-to-r from-blue-600 to-blue-500 px-6 py-4">
+                        <div class="flex items-center justify-between">
+                            <!-- Title und Subtitle -->
+                            <div>
+                                <h2 class="text-2xl font-bold text-white" x-html="highlight(item[cardHeader.title])"></h2>
+                                <p class="text-blue-100" x-html="highlight(item[cardHeader.subtitle])"></p>
+                            </div>
+                            <!-- Badge-->
+                            <span x-text="item[cardHeader.badge]" class="rounded-full bg-white/20 px-3 py-1 text-xs font-bold uppercase tracking-wider text-white"></span>
+                        </div>
+                    </header>
+
+                    <!-- Fields -->
+                    <div class="divide-y divide-slate-100">
+                        <template x-for="field in fields" :key="field.key">
+                            <div x-show="!field.hideIfEmpty || item[field.key]" class="flex justify-between px-6 py-4">
+                                <span class="text-slate-500" x-text="field.label"></span>
+                                <div>
+                                    <span :class="field.class" x-text="item[field.key] || '—'"></span>
+                                    <template x-if="field.suffix && field.suffix(item) ">
+                                        <span x-text="field.suffix(item)"></span>
+                                    </template>
+                                </div>
+                            </div> 
+                        </template>
+                    </div>
+
+                </article>
+                </template>
+            </div>
+
+            <!-- No data found -->
+            <template x-if="filterValues.search && !filteredData.length && !loading">
+                <div class="text-center text-gray-500 py-12">
+                    Keine Geräte gefunden.
+                </div>
+            </template>
+
+        </div>
+
+
+
+    </div>
+
+    <!-------------------------------------------------------------------------------------------------------------------->
+
+    <script>
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('grosshandel', () => ({
+
+                init() {
+                    this.loadSheet();
+                },
+
+                sheetId: '1ztbecW1v7J4EXyuBtGFraQhIoUtzIa8zWe0TdA0g0e8',
+                sheetGid: '1469501021',
+                
+                get csvUrl() { 
+                    return `https://docs.google.com/spreadsheets/d/${this.sheetId}/export?format=csv&gid=${this.sheetGid}`;
+                },
+
+                error: null,
+                loading: false,
+
+                headers: [],
+                data: [],
+
+                /* ------------------------------------------------------------------------------------------------------------- */
+
+                cardHeader: {
+                    title: "model",
+                    subtitle: "hersteller",
+                    badge: "fach"
+                },
+
+                 get fields() {
+                    return [
+                        {
+                            label: "CPU",
+                            key: "cpu",
+                            indicatesItem: true,
+                        },
+                        {
+                            label: "RAM",
+                            key: "ram",
+                            indicatesItem: true,
+                        },
+                        {
+                            label: "SSD",
+                            key: "ssd",
+                            indicatesItem: true,
+                        },
+                        {
+                            label: "Grafik",
+                            key: "grafik",
+                        },
+                        {
+                            label: "Stückzahl",
+                            key: "quantity",
+                        },
+                        {
+                            label: "Zustand",
+                            key: "condition",
+                            hideIfEmpty: true,
+                        },
+                        {
+                            label: "Spezials",
+                            key: "spezials",
+                            hideIfEmpty: true,
+                        },
+                        {
+                            label: "K-Layout",
+                            key: "layout",
+                        },
+                        {
+                            label: "Preis",
+                            key: "price",
+                            class: "text-blue-600 font-bold",
+                            hideIfEmpty: true,
+                        },
+                        {
+                            label: "Kommentar",
+                            key: "comment",
+                            hideIfEmpty: true,
+                        },
+                        {
+                            label: "Kleinanzeigen",
+                            key: "kleinanzeigen",
+                            hideIfEmpty: true,
+                            suffix: item => item.eingestellt ? "✅" : "",
+                        }
+                    ];
+                },
+
+                /* ------------------------------------------------------------------------------------------------------------- */
+
+                async loadSheet() {
+
+                    this.loading = true;
+                    this.error = null;
+
+                    try {
+                        const response = await fetch(this.csvUrl);
+                        if (!response.ok) {
+                            throw new Error(`Error loading sheet: ${response.status} ${response.statusText}`);
+                        }
+
+                        const csvText = await response.text();
+
+
+                        const parsed = Papa.parse(csvText, {
+                            header: true,
+                            skipEmptyLines: true,
+
+                            transformHeader: (header, index) => {
+                                if (index == 7) return 'quantity';      // Stückzahl
+                                if (index == 10) return 'layout';       // K-Layout
+                                if (index == 11) return 'price';        // Preis
+                                if (index == 12) return 'comment';      // Kommentar
+                                if (index == 15) return 'location';     // Laden/Großhandel
+
+                                return header = header.toLowerCase().trim();
+                            }
+
+                        });
+
+                        this.headers = parsed.meta.fields;
+                        this.prepareData(parsed.data);
+
+
+
+                    } catch (error) {
+                        this.error = `Error fetching sheet: ${error.message}`;
+                        return;
+                    } finally {
+                        this.loading = false;
+                    }
+
+
+                },
+
+                prepareData(data) {
+                    this.data = data.map((item, index) => ({
+                        id: index,
+                        ...item
+                    }));
+                },
+
+                /* ------------------------------------------------------------------------------------------------------------- */
+
+                filters: [
+                    {
+                        name: "search",
+                        active: (values) => values.search && values.search.trim() !== "",
+                        apply: "searchFilter",
+                    },
+                    
+                    {
+                        name: "comments",
+                        active: (values) => values.comments,
+                        apply: "commentsFilter",
+                    },
+
+                    {
+                        name: "orphanPrices",
+                        active: (values) => values.orphanPrices,
+                        apply: "orphanPricesFilter",
+                    },
+
+                    {
+                        name: "nonEmpty",
+                        active: (values) => values.nonEmpty,
+                        apply: "nonEmptyFilter",
+                    },
+
+                    {
+                        name: "kleinanzeigen",
+                        active: (values) => values.kleinanzeigen,
+                        apply: "kleinanzeigenFilter",
+                    },
+
+                    {
+                        name: "notListed",
+                        active: (values) => values.notListed,
+                        apply: "notListedFilter",
+                    }
+                    
+                ],
+
+
+                searchFilter(data, values) {
+                    return data.filter(item =>
+                        [item.model, item.hersteller].some(value =>
+                            String(value ?? "").toLowerCase().includes(values.search.toLowerCase())
+                        )
+                    );
+                },
+
+                commentsFilter(data, values) {
+                    return data.filter(item => item.comment && item.comment.trim() !== ""); 
+                },
+
+                orphanPricesFilter(data, values) {
+                    return data.filter(item => item.kleinanzeigen && (!item.model && !item.hersteller));
+                },
+
+                nonEmptyFilter(data, values) {
+                    const relevantFields = this.fields
+                        .filter(field => field.indicatesItem)
+                        .map(field => field.key);
+
+                    return data.filter(item =>
+                        relevantFields.some(key => String(item[key] ?? "").trim() !== "")
+                    );
+                },
+
+                kleinanzeigenFilter(data, values) {
+                    return data.filter(item => item.kleinanzeigen);
+                },
+
+                notListedFilter(data, values) {
+                    return data.filter(item => item.kleinanzeigen && !item.eingestellt);
+                },
+
+
+                filterValues: {
+                    search: "",
+                    comments: false,
+                    orphanPrices: false,
+                    nonEmpty: false,
+                    kleinanzeigen: false,
+                    notListed: false,
+                },
+
+                get filteredData() {
+                    return this.filters.reduce((data, filter) => {
+
+                        if (!filter.active(this.filterValues))
+                            return data;
+
+                        return this[filter.apply](data, this.filterValues);
+                    }, this.data);
+
+                },
+
+                /* ------------------------------------------------------------------------------------------------------------- */
+
+                highlight(text, term = this.filterValues.search) {
+                    if (!term) return text;
+
+                    const escaped = term.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+                    return String(text ?? "").replace(
+                        new RegExp(`(${escaped})`, "ig"),
+                        '<mark class="bg-yellow-300 rounded px-0.5">$1</mark>'
+                    );
+                }
+
+
+            }))
+        })
+    </script>
+
+
+</body>

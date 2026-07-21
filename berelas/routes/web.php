@@ -8,3 +8,4 @@ Route::get('/', function () {
 
 Route::livewire('/kleinanzeigen', 'pages::kleinanzeigen');
 Route::livewire('/großhandel', 'pages::großhandel');
+Route::livewire('/aufgaben', 'pages::tasks');

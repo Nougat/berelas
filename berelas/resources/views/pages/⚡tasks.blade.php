@@ -66,21 +66,21 @@ new class extends Component
     <div class="mt-4 bg-gray-300 rounded p-2">
         <h2 class="font-bold text-2xl mb-2 border-b-2 border-b-amber-400"> Items with Kleinanzeigen price but not listed: {{ count($this->notListed) }} </h2>
         @foreach ($this->notListed as $item)
-            <div> {{$item['Fach']}} {{ $item['Model']}} {{ $item['CPU'] }} {{ $item['RAM'] }} </div>
+            <div> {{$item['Fach']}} {{ $item['Model']}} {{ $item['CPU'] }} {{ $item['RAM'] }} {{ $item['SSD'] }} </div>
         @endforeach
     </div>
 
     <div class="mt-4 bg-gray-300 rounded p-2">
         <h2 class="font-bold text-2xl mb-2 border-b-2 border-b-amber-400"> Items listed at Kleinanzeigen with invalid ID: {{ count($this->invalidKleinanzeigenId) }} </h2>
         @foreach ($this->invalidKleinanzeigenId as $item)
-            <div> {{$item['Fach']}} {{ $item['Model']}} {{ $item['CPU'] }} {{ $item['RAM'] }} </div>
+            <div> hersteller: {{ $item['Hersteller'] }} fach:{{$item['Fach']}} model:{{ $item['Model']}} cpu:{{ $item['CPU'] }} ram:{{ $item['RAM'] }} ssd: {{ $item['SSD'] }} ID: {{ var_dump($item['KleinanzeigenId']) }} </div>
         @endforeach
     </div>
 
     <div class="mt-4 bg-gray-300 rounded p-2">
         <h2 class="font-bold text-2xl mb-2 border-b-2 border-b-amber-400"> Items listed without Kleinanzeigen ID: {{ count($this->noKleinanzeigenId) }} </h2>
         @foreach ($this->noKleinanzeigenId as $item)
-            <div> {{$item['Fach']}} {{ $item['Model']}} {{ $item['CPU'] }} {{ $item['RAM'] }} </div>
+            <div> {{$item['Fach']}} {{ $item['Model']}} {{ $item['CPU'] }} {{ $item['RAM'] }} {{ $item['SSD'] }} </div>
         @endforeach
     </div>
 

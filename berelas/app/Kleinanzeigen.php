@@ -57,7 +57,14 @@ class Kleinanzeigen
 
             // optional information, check if present
             $ad["image"] = $responseArray[$adInformation["image"] ?? ''] ?? null;
-            $ad["price"] = $responseArray[$adInformation["price"] ?? ''] ?? null;
+            $rawPrice = $responseArray[$adInformation["price"] ?? ''] ?? null;
+            if ($rawPrice !== null) {
+                // Entfernt alle Punkte, Kommata und Leerzeichen aus dem String
+                $cleanPrice = str_replace(['.', ',', ' '], '', $rawPrice);
+                $ad["price"] = (int)$cleanPrice;
+            } else {
+                $ad["price"] = null;
+            }
 
             $ads[] = $ad;
 

@@ -11,9 +11,12 @@ new class extends Component
     public array $kleinanzeigenAds = [];
     public array $grosshandelItems = [];
 
+    private Kleinanzeigen $kleinanzeigen;
+
     public function mount(Kleinanzeigen $kleinanzeigen, Großhandel $grosshandel)
     {
         $this->fetch($kleinanzeigen, $grosshandel);
+        $this->kleinanzeigen = $kleinanzeigen;
     }
 
     public function fetch(Kleinanzeigen $kleinanzeigen, Großhandel $grosshandel) 
@@ -31,20 +34,29 @@ new class extends Component
     #[Computed]
     public function invalidKleinanzeigenId()
     {
-        $ids = collect($this->kleinanzeigenAds)->pluck('id')->all();
-        return array_filter($this->grosshandelItems, fn($item) => ($item['KleinanzeigenId'] && $item['KleinanzeigenId'] != "V" && !in_array($item['KleinanzeigenId'], $ids)));
-    }
-
-    #[Computed]
-    public function noKleinanzeigenId()
-    {
-        return array_filter($this->grosshandelItems, fn($item) => ($item['KleinanzeigenId'] == "V"));
+        $validIds = collect($this->kleinanzeigenAds)->pluck('id')->flip();
+        return collect($this->grosshandelItems)
+            ->filter(function ($item) {
+                return $item['KleinanzeigenId'] && !isset($validIds[(int)$item['KleinanzeigenId']]);
+            })
+            ->values()
+            ->all();
     }
 
     #[Computed]
     public function orphanKleinanzeigenPrice()
     {
         return array_filter($this->grosshandelItems, fn($item) => (!$item['Model']) && $item['KleinanzeigenPrice']);
+    }
+
+    #[Computed]
+    public function wrongPrice()
+    {
+        return array_filter($this->grosshandelItems, function($item) {
+            $ad = array_first(array_filter($this->kleinanzeigenAds, fn($ad) => $ad['id'] == $item['KleinanzeigenId']));
+            if (!$ad) return false;
+            return $item['KleinanzeigenPrice'] && $item['KleinanzeigenId'] && $ad['price'] != $item['KleinanzeigenPrice'];
+        });
     }
 
 
@@ -66,7 +78,7 @@ new class extends Component
     <div class="mt-4 bg-gray-300 rounded p-2">
         <h2 class="font-bold text-2xl mb-2 border-b-2 border-b-amber-400"> Items with Kleinanzeigen price but not listed: {{ count($this->notListed) }} </h2>
         @foreach ($this->notListed as $item)
-            <div> {{$item['Fach']}} {{ $item['Model']}} {{ $item['CPU'] }} {{ $item['RAM'] }} {{ $item['SSD'] }} </div>
+            <div> {{$item['Fach']}} {{ $item['Model']}} {{ $item['CPU'] }} {{ $item['RAM'] }} {{ $item['SSD'] }} {{ $item['Grafik'] }} {{ $item['Spezials'] }} {{ $item['KleinanzeigenPrice'] }}€ </div>
         @endforeach
     </div>
 
@@ -78,8 +90,8 @@ new class extends Component
     </div>
 
     <div class="mt-4 bg-gray-300 rounded p-2">
-        <h2 class="font-bold text-2xl mb-2 border-b-2 border-b-amber-400"> Items listed without Kleinanzeigen ID: {{ count($this->noKleinanzeigenId) }} </h2>
-        @foreach ($this->noKleinanzeigenId as $item)
+        <h2 class="font-bold text-2xl mb-2 border-b-2 border-b-amber-400"> Items with wrong Kleinanzeigen prices: {{ count($this->wrongPrice) }} </h2>
+        @foreach ($this->wrongPrice as $item)
             <div> {{$item['Fach']}} {{ $item['Model']}} {{ $item['CPU'] }} {{ $item['RAM'] }} {{ $item['SSD'] }} </div>
         @endforeach
     </div>

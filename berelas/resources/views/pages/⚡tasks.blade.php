@@ -11,12 +11,9 @@ new class extends Component
     public array $kleinanzeigenAds = [];
     public array $grosshandelItems = [];
 
-    private Kleinanzeigen $kleinanzeigen;
-
     public function mount(Kleinanzeigen $kleinanzeigen, Großhandel $grosshandel)
     {
         $this->fetch($kleinanzeigen, $grosshandel);
-        $this->kleinanzeigen = $kleinanzeigen;
     }
 
     public function fetch(Kleinanzeigen $kleinanzeigen, Großhandel $grosshandel) 
@@ -36,7 +33,7 @@ new class extends Component
     {
         $validIds = collect($this->kleinanzeigenAds)->pluck('id')->flip();
         return collect($this->grosshandelItems)
-            ->filter(function ($item) {
+            ->filter(function ($item) use ($validIds) {
                 return $item['KleinanzeigenId'] && !isset($validIds[(int)$item['KleinanzeigenId']]);
             })
             ->values()
@@ -59,6 +56,12 @@ new class extends Component
         });
     }
 
+    #[Computed]
+    public function withComment() 
+    {
+        return array_filter($this->grosshandelItems, fn($item) => $item['Kommentar']);
+    }
+
 
 };
 ?>
@@ -67,6 +70,11 @@ new class extends Component
     <span>{{ count($kleinanzeigenAds) }} Kleinanzeigen</span>
     <br>
     <span> {{ count($grosshandelItems) }} Großhandel </span>
+
+    {{-- 
+    <pre> {{ var_dump($kleinanzeigenAds[0]) }} </pre>
+    <pre> {{ var_dump($grosshandelItems[0]) }} </pre>
+    --}}
     
     <div class="mt-4 bg-gray-300 rounded p-2">
         <h2 class="font-bold text-2xl mb-2 border-b-2 border-b-amber-400"> Items with orphan Kleinanzeigen price: {{ count($this->orphanKleinanzeigenPrice) }} </h2>
@@ -93,6 +101,13 @@ new class extends Component
         <h2 class="font-bold text-2xl mb-2 border-b-2 border-b-amber-400"> Items with wrong Kleinanzeigen prices: {{ count($this->wrongPrice) }} </h2>
         @foreach ($this->wrongPrice as $item)
             <div> {{$item['Fach']}} {{ $item['Model']}} {{ $item['CPU'] }} {{ $item['RAM'] }} {{ $item['SSD'] }} </div>
+        @endforeach
+    </div>
+
+    <div class="mt-4 bg-gray-300 rounded p-2">
+        <h2 class="font-bold text-2xl mb-2 border-b-2 border-b-amber-400"> Items with comments: {{ count($this->withComment) }} </h2>
+        @foreach ($this->withComment as $item)
+            <div> {{$item['Fach']}} {{ $item['Model']}} {{ $item['CPU'] }} {{ $item['RAM'] }} {{ $item['SSD'] }}  {{ $item['Kommentar'] }} </div>
         @endforeach
     </div>
 

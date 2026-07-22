@@ -50,14 +50,31 @@ class Großhandel
 
         return collect($table['rows'])
             ->map(function ($row) use ($headers) {
+                $casts = [
+                    'Fach' => 'int',
+                    'Price' => 'int',
+                    'KleinanzeigenPrice' => 'int',
+                    'KleinanzeigenId' => 'string',
+                    'RAM' => 'int',
+                    'SSD' => 'int',
+                    'Amount' => 'int',
+                ];    
+            
                 $cells = $row['c'] ?? [];
-
                 $item = [];
 
                 foreach ($headers as $index => $header) {
-                    $item[$header] = $cells[$index]['v'] ?? null;
+                    $value = $cells[$index]['v'] ?? null;
+                    if ($value !== null && isset($casts[$header])) {
+                        $value = match ($casts[$header]) {
+                            'int' => (int) $value,
+                            'flaot' => (float) $value,
+                            'string' => (string) $value,
+                            default => $value,
+                        };
+                    }
+                    $item[$header] = $value;
                 }
-
                 return $item;
             })
             ->toArray();

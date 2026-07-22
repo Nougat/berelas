@@ -51,7 +51,7 @@ class Kleinanzeigen
             $ad = [];
             
             // mandatory information
-            $ad["id"] = $responseArray[$adInformation["id"]];
+            $ad["id"] = (string)$responseArray[$adInformation["id"]];
             $ad["title"] = $responseArray[$adInformation["title"]];
             $ad["url"] = $responseArray[$adInformation["url"]];
 

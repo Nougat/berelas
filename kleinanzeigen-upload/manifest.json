@@ -1,0 +1,14 @@
+{
+    "manifest_version": 3,
+    "name": "Kleinanzeigen Upload",
+    "version": "0.15",
+    "description": "Upload items to Kleinanzeigen",
+
+     "action": {
+        "default_popup": "popup/popup.html"
+     },
+
+     "host_permissions": [
+        "http://localhost:8000/*"
+     ]
+}

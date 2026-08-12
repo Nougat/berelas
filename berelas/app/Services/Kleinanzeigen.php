@@ -1,20 +1,22 @@
 <?php
 
-namespace App;
+namespace App\Services;
 
+use App\Data\KleinanzeigenAd;
+use Illuminate\Support\Collection;
 
 class Kleinanzeigen
 {
     
-    public function getAds(string $seller = "berelas-it", $page = 1, $adsPerPage = 100): array
+    public function getAds(string $seller = "berelas-it", $page = 1, $adsPerPage = 100): Collection
     {
         $fetch = $this->fetchAds($seller, $page, $adsPerPage);
         $ads = $this->decode($fetch);
-        $numAds = count($ads);
+        $numAds = $ads->count();
 
-        if ($numAds == 0) return [];
+        if ($numAds == 0) return new Collection();
         if ($numAds < $adsPerPage) return $ads;
-        else return array_merge($ads, $this->getAds($seller, $page+1, $adsPerPage));
+        else return $ads->merge($this->getAds($seller, $page+1, $adsPerPage));
     }
 
 
@@ -38,9 +40,9 @@ class Kleinanzeigen
     }
 
 
-    public function decode(string $responseText): array {
+    public function decode(string $responseText): Collection {
 
-        $ads = [];
+        $ads = new Collection();
 
         $responseArray = json_decode($responseText, true);
         $adsIndexes = $responseArray[$responseArray[0]["ads"]];
@@ -53,7 +55,7 @@ class Kleinanzeigen
             // mandatory information
             $ad["id"] = (string)$responseArray[$adInformation["id"]];
             $ad["title"] = $responseArray[$adInformation["title"]];
-            $ad["url"] = $responseArray[$adInformation["url"]];
+            $ad["url"] = "https://www.kleinanzeigen.de" . $responseArray[$adInformation["url"]];
 
             // optional information, check if present
             $ad["image"] = $responseArray[$adInformation["image"] ?? ''] ?? null;
@@ -66,13 +68,19 @@ class Kleinanzeigen
                 $ad["price"] = null;
             }
 
-            $ads[] = $ad;
+            $ads[] = KleinanzeigenAd::fromArray($ad);
 
         }
 
         return $ads;
 
     }
+
+    /*
+    |------------------------------------------------------------------------
+    | Helper Functions
+    |------------------------------------------------------------------------
+    */
 
 
 }

@@ -108,8 +108,7 @@ new class extends Component
             ->filter(function (KleinanzeigenAd $ad) use ($listedKleinanzeigenIds) {
                 return !$listedKleinanzeigenIds->contains($ad->id);
             })
-            ->values()
-            ->all();
+            ->values();
     }
 
 

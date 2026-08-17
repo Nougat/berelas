@@ -42,13 +42,14 @@ new class extends Component
     */
     public function getItems(): Collection
     {
-        return InventoryItem::with('appleItem')
+
+        return AppleItem::with('inventoryItem')
             ->get()
-            ->groupBy('shelf')
+            ->groupBy(fn ($item) => $item->inventoryItem?->shelf)
             ->sortBy(function ($items, $shelf) {
                 $position = array_search($shelf, $this->shelfOrder);
                 return $position === false ? PHP_INT_MAX : $position;
-        });
+            });
     }
 
     /*
@@ -71,12 +72,18 @@ new class extends Component
                     ";$shelf"
                 ], ';');
 
-                foreach ($shelfItems as $item) {
+                foreach ($shelfItems as $appleItem) {
+                    $inventoryItem = $appleItem->inventoryItem;
                     fputcsv($handle, [
-                        $item->appleItem->tag,
-                        implode(" | ", array_filter([$item->model, $item->cpu, $item->ram ? $item->ram . "GB RAM" : "", $item->ssd ? $item->ssd . "GB SSD" : ""])),
-                        $item->condition,
-                        $item->price,
+                        $appleItem->tag,
+                        implode(" | ", array_filter([
+                            $inventoryItem->model,
+                            $inventoryItem->cpu,
+                            $inventoryItem->ram ? $inventoryItem->ram . "GB RAM" : "",
+                            $inventoryItem->ssd ? $inventoryItem->ssd . "GB SSD" : "",
+                        ])),
+                        $inventoryItem->condition,
+                        $inventoryItem->price,
                     ], ';');
                 }
 
@@ -195,7 +202,7 @@ new class extends Component
 
             <tbody class="divide-y divide-gray-100">
                 
-                @forelse($this->getItems() as $shelf => $shelfItems)
+                @forelse($this->getItems() as $shelf => $items)
 
                     <tr>
                         <td colspan="15" class="px-4 py-4 text-center bg-gray-700 text-white">
@@ -203,10 +210,10 @@ new class extends Component
                         </td>
                     </tr>
 
-                    @foreach($shelfItems as $inventoryItem)
+                    @foreach($items as $appleItem)
 
                         @php
-                            $appleItem = $inventoryItem->appleItem;
+                            $inventoryItem = $appleItem->inventoryItem;
                         @endphp
 
                         <tr class="hover:bg-gray-50">

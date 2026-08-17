@@ -13,18 +13,25 @@ class AppleItem extends Model
     protected $fillable = [
         'inventory_item_id',
         'release_year',
-        'generation',
+        'tag',
     ];
 
     protected $casts = [
         'release_year' => 'integer',
-        'generation' => 'integer',
+        'tag' => 'string',
     ];
 
 
     public function inventoryItem(): BelongsTo
     {
         return $this->belongsTo(InventoryItem::class);
+    }
+
+    protected static function booted(): void
+    {
+        static::deleting(function (AppleItem $appleItem) {
+            $appleItem->inventoryItem?->delete();
+        });
     }
 
 }

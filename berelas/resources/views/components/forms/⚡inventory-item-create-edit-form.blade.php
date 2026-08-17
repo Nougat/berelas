@@ -61,7 +61,6 @@ new class extends Component
     #[On('inventory-item-save-request')]
     public function save(): void
     { 
-        dd("test4");
         $validated = $this->validate([
             'shelf' => "nullable|string|max:255",
             'manufacturer' => "nullable|string|max:255",

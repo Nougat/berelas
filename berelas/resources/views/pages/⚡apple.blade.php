@@ -27,20 +27,10 @@ new class extends Component
 
     /*
     |--------------------------------------------------------------------------
-    | Mount
-    |--------------------------------------------------------------------------
-    */
-    public function mount(): void
-    {
-        $this->getItems();
-    }
-
-    /*
-    |--------------------------------------------------------------------------
     | GetItems
     |--------------------------------------------------------------------------
     */
-    public function getItems(): Collection
+    public function getGroupedAppleItems(): Collection
     {
 
         return AppleItem::with('inventoryItem')
@@ -68,7 +58,7 @@ new class extends Component
     */
     public function csvExport()
     {
-        $items = $this->getItems();
+        $items = $this->getGroupedAppleItems();
         $filename = "Preise.csv";
         
         return response()->streamDownload(function () use ($items) {
@@ -157,24 +147,34 @@ new class extends Component
     */
     public function render()
     {
-        return $this->view();
+
+        $appleItems = $this->getGroupedAppleItems();
+
+        return $this->view([
+            'appleItems' => $appleItems,
+            'appleItemCount' => $appleItems->flatten(1)->count(),
+        ]);
     }
 };
 ?>
 
-<div class="space-y-6 p-6">
+<div class="space-y-6 p-6 pt-0">
     
     {{-- Header --}}
-    <div class="flex items-center justify-between">
+    <div class="sticky top-0 z-40 -mx-6 flex items-center justify-between border-b bg-white/95 px-6 py-4 backdrop-blur">
         <div>
             <h1 class="text-2xl font-bold"> Apple Geräte </h1>
             <p class="text-sm text-gray-500">
-                {{ $this->getItems()->count() }} Geräte
+                {{ $appleItemCount }} Geräte
             </p>
         </div>
 
-        <div>
-            <button type="button" wire:click="csvExport" wire:loading.attr="disabled" class="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50">
+        <div class="flex gap-2">
+            <button type="button" 
+                wire:click="csvExport" 
+                wire:loading.attr="disabled" 
+                class="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+            >
                 <span wire:loading.remove>
                     CSV exportieren
                 </span>
@@ -184,7 +184,10 @@ new class extends Component
                 </span>
             </button>
 
-            <button type="button" wire:click="create" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+            <button type="button"
+                wire:click="create" 
+                class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            >
                 + Gerät hinzufügen
             </button>
         </div>
@@ -211,7 +214,7 @@ new class extends Component
 
             <tbody class="divide-y divide-gray-100">
                 
-                @forelse($this->getItems() as $shelf => $items)
+                @forelse($appleItems as $shelf => $shelfItems)
 
                     <tr>
                         <td colspan="15" class="px-4 py-4 text-center bg-gray-700 text-white">
@@ -219,7 +222,7 @@ new class extends Component
                         </td>
                     </tr>
 
-                    @foreach($items as $appleItem)
+                    @foreach($shelfItems as $appleItem)
 
                         @php
                             $inventoryItem = $appleItem->inventoryItem;

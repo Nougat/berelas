@@ -156,7 +156,7 @@ new class extends Component
     <div class="mt-4 bg-gray-300 rounded p-2">
         <h2 class="font-bold text-2xl mb-2 border-b-2 border-b-amber-400"> Items with comments: {{ count($this->withComment) }} </h2>
         @foreach ($this->withComment as $item)
-            <div> {{ $item }} </div>
+            <div> {{ $item }} | {{  $item->comment }} </div>
         @endforeach
     </div>
 

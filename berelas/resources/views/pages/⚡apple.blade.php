@@ -46,6 +46,15 @@ new class extends Component
         return AppleItem::with('inventoryItem')
             ->get()
             ->groupBy(fn ($item) => $item->inventoryItem?->shelf)
+            ->map(function ($items) {
+                return $items->sortBy([
+                    ['release_year', 'asc'],
+                    ['model', 'asc'],
+                    ['cpu', 'desc'],
+                    ['ram', 'asc'],
+                    ['ssd', 'asc'],
+                ]);
+            })
             ->sortBy(function ($items, $shelf) {
                 $position = array_search($shelf, $this->shelfOrder);
                 return $position === false ? PHP_INT_MAX : $position;
@@ -60,7 +69,7 @@ new class extends Component
     public function csvExport()
     {
         $items = $this->getItems();
-        $filename = "preise.csv";
+        $filename = "Preise.csv";
         
         return response()->streamDownload(function () use ($items) {
             $handle = fopen('php://output', 'w');
@@ -75,15 +84,15 @@ new class extends Component
                 foreach ($shelfItems as $appleItem) {
                     $inventoryItem = $appleItem->inventoryItem;
                     fputcsv($handle, [
-                        $appleItem->tag,
+                        $appleItem->tag ?? "A0",
                         implode(" | ", array_filter([
                             $inventoryItem->model,
                             $inventoryItem->cpu,
-                            $inventoryItem->ram ? $inventoryItem->ram . "GB RAM" : "",
-                            $inventoryItem->ssd ? $inventoryItem->ssd . "GB SSD" : "",
+                            $inventoryItem->ram ? $inventoryItem->ram . "GB RAM" : null,
+                            $inventoryItem->ssd ? $inventoryItem->ssd . "GB SSD" : null,
                         ])),
-                        $inventoryItem->condition,
                         $inventoryItem->price,
+                        $inventoryItem->condition,
                     ], ';');
                 }
 

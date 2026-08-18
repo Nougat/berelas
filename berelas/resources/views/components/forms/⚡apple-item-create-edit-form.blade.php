@@ -13,6 +13,16 @@ new class extends Component
     public ?int $releaseYear = null;
     public ?string $tag = null;
 
+    public ?string $type = null;
+    public array $types = [
+        'MacBook Pro',
+        'MacBook Air',
+        'iPhone',
+        'iPad',
+        'iPad Pro',
+        'Zubehör',
+    ];
+
 
 
     public function mount(?string $appleItemId = null): void
@@ -70,6 +80,30 @@ new class extends Component
 <form wire:submit="save">
     <div class="max-h-[70vh] space-y-5 overflow-y-auto p-6">
         
+        {{-- Gerätetyp --}}
+        <div>
+            <label class="mb-2 block text-sm font-medium">
+                Gerätetyp
+            </label>
+
+            <div class="flex flex-wrap gap-2">
+                @foreach($types as $type)
+                    <button
+                        type="button"
+                        wire:click="$set('type', '{{ $type }}')"
+                        class="rounded-lg border px-4 py-2 text-sm
+                            {{ $this->type === $type
+                                ? 'border-blue-600 bg-blue-500 text-white'
+                                : 'border-gray-300 bg-white hover:bg-gray-50'
+                            }}"
+                    >
+                        {{ $type }}
+                    </button>
+                @endforeach
+            </div>
+        </div>
+
+
         <div class="grid grid-cols-2 gap-4">
             {{-- Erscheinungsjahr --}}
             <div>

@@ -14,11 +14,13 @@ class AppleItem extends Model
         'inventory_item_id',
         'release_year',
         'tag',
+        'type',
     ];
 
     protected $casts = [
         'release_year' => 'integer',
         'tag' => 'string',
+        'type' => 'string',
     ];
 
 

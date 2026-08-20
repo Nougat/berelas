@@ -17,7 +17,7 @@ new class extends Component {
     public ?string $tag = null;
 
     public ?string $type = null;
-    public array $types = ['MacBook Pro', 'MacBook Air', 'iPhone', 'iPad', 'iPad Pro', 'Zubehör', 'Sonstiges'];
+    public array $types = ['MacBook Pro', 'MacBook Air', 'iPhone', 'iPad', 'iPad Pro', 'Zubehör'];
 
     public function mount(?string $appleItemId = null): void
     {
@@ -82,31 +82,16 @@ new class extends Component {
         $this->appleDevice = $device;
         $this->deviceFound = true;
 
-        $this->releaseYear = $device['release_year'];
-        $this->inventory->shelf = $this->determineShelf($device);
-        $this->inventory->model = $device['name'];
-        $this->inventory->cpu = $device['soc'];
-
         if (in_array($device['type'], $this->types)) {
             $this->type = $device['type'];
         } else {
             $this->type = 'Sonstiges';
         }
-    }
 
-    public function determineShelf(array $device): ?string
-    {
-        return match ($device['type']) {
-            'MacBook Pro', 'MacBook Air' => "{$device['type']} {$device['screen_size']}",
+        $this->releaseYear = $device['release_year'];
+        $this->inventory->model = $device['name'];
+        $this->inventory->cpu = $device['soc'];
 
-            'iPone' => 'iPhone',
-
-            'iPadPro' => 'iPadPro',
-            'iPad Air' => 'iPad Air',
-            'iPad' => 'iPad',
-
-            default => 'Sonstiges',
-        };
     }
 
     public function render()

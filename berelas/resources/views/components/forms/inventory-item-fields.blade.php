@@ -75,7 +75,8 @@
                 @foreach ([8, 16, 32] as $ramOption)
                     <button type="button" wire:click="$set('{{ $prefix }}.ram', {{ $ramOption }})"
                         @click="customRam = false" class="rounded-lg px-4 py-2"
-                        :class="!customRam && $wire.{{ $prefix }}.ram == {{ $ramOption }} ? 'bg-blue-600 text-white' : 'bg-gray-100 hover:bg-gray-200'">
+                        :class="!customRam && $wire.{{ $prefix }}.ram == {{ $ramOption }} ?
+                            'bg-blue-600 text-white' : 'bg-gray-100 hover:bg-gray-200'">
                         {{ $ramOption }}
                     </button>
                 @endforeach
@@ -100,7 +101,8 @@
                 @foreach ([128, 256, 512] as $ssdOption)
                     <button type="button" wire:click="$set('{{ $prefix }}.ssd', {{ $ssdOption }})"
                         @click="customSsd = false" class="rounded-lg px-4 py-2"
-                        :class="!customSsd && $wire.{{ $prefix }}.ssd == {{ $ssdOption }} ? 'bg-blue-600 text-white' : 'bg-gray-100 hover:bg-gray-200'">
+                        :class="!customSsd && $wire.{{ $prefix }}.ssd == {{ $ssdOption }} ?
+                            'bg-blue-600 text-white' : 'bg-gray-100 hover:bg-gray-200'">
                         {{ $ssdOption }}
                     </button>
                 @endforeach
@@ -141,8 +143,16 @@
     {{-- Layout --}}
     <div>
         <label class="mb-1 block text-sm font-medium">Layout</label>
-        <input type="text" wire:model="{{ $prefix }}.layout" class="w-full rounded-lg p-2 bg-gray-100"
-            placeholder="QWERTZ, QWERTY, AZERTY, ...">
+        <div class="flex w-full gap-2">
+            @foreach (['QWERTZ', 'QWERTY', 'AZERTY', 'Anderes'] as $layoutOption)
+                    <button type="button" wire:click="$set('{{ $prefix }}.layout', @js($layoutOption))"
+                        class="rounded-lg px-4 py-2"
+                        :class="$wire.{{ $prefix }}.layout == @js($layoutOption) ?
+                            'bg-blue-600 text-white' : 'bg-gray-100 hover:bg-gray-200'">
+                        {{ $layoutOption }}
+                    </button>
+            @endforeach
+        </div>
         @error($prefix . '.layout')
             <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
         @enderror

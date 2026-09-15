@@ -1,19 +1,33 @@
 <?php
 
-use App\Großhandel;
+use App\Services\Großhandel;
+use Illuminate\Support\Collection;
 use Livewire\Component;
 
 new class extends Component
 {
-    public array $items = [];
 
-    public string $errorMessage;
-    public bool $isLoading;
+    public Collection $großhandelItems;
+    public string $errorMessage = "";
+    public bool $isLoading = false;
 
-    public function getItems(Großhandel $gh) 
+
+    public function getItems(Großhandel $gh) : Collection
     {
-        $this->items = $gh->getItems();
+        return $gh->getItems();
     }
+
+    public function getGhItemsCountProperty() : int
+    {
+        return $this->großhandelItems->count();
+    }
+
+
+    public function mount(Großhandel $gh)
+    {
+        $this->großhandelItems = $this->getItems($gh);
+    }
+
 
 };
 ?>
@@ -28,27 +42,14 @@ new class extends Component
         <div class="text-2xl text-red-500">{{ $errorMessage }}</div>
         @endif
 
-        {{-- Headline --}}
-        <div class="text-center mb-6" wire:show='!items.length'>
-            <h1 class="text-3xl font-bold text-gray-900">Großhandel</h1>
-            <p class="mt-2 text-gray-600">This page loads the Google Sheet data directly in browser Javascript.</p>
-        </div>
-
-        {{-- Load/Reload Button --}}
-        <div class="mb-6 space-y-4">
-            <button wire:click="getItems" wire:bind:disabled="isLoading" 
-                    class="w-full py-3 px-4  bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-                    wire:text="isLoading ? 'Loading...' : (items.length ? 'Reload sheet data' : 'Load sheet data')">
-            </button>
-        </div>
 
         {{-- Search input and some simple filters --}}
         <div class="mb-6">
             
-            <input type="text" placeholder="Search..." wire:model="filterValues.search" wire:show="items.length"
+            <input type="text" placeholder="Search..." wire:model="filterValues.search"
                     class="w-full border border-gray-300 rounded-lg py-2 px-4 focus:outline-none focus:ring-2 focus:ring-blue-500">
             
-            <div wire:show="items.length" class="w-full flex justify-between">
+            <div class="w-full flex justify-between">
                 <label>
                     <input type="checkbox" wire:model="filterValues.comments" />
                     Show only comments
@@ -75,6 +76,34 @@ new class extends Component
                 </label>
             </div>
         </div>
+
+        
+        {{-- Items --}}
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            @foreach ($großhandelItems as $item)
+                <div class="bg-gray-50 p-4 rounded-lg shadow-md">
+                    <h2 class="text-lg font-semibold">{{ $item->displayName() }}</h2>
+                    <p class="text-gray-600">{{ $item->cpu }}</p>
+                </div>
+            @endforeach
+
+        {{-- 
+        public readonly ?int $shelf,
+        public readonly ?string $manufacturer,
+        public readonly ?string $model,
+        public readonly ?string $cpu,
+        public readonly ?int $ram,
+        public readonly ?int $ssd,
+        public readonly ?string $gpu,
+        public readonly ?int $amount,
+        public readonly ?string $condition,
+        public readonly ?string $specials,
+        public readonly ?string $layout,
+        public readonly ?int $price,
+        public readonly ?string $comment,
+        public readonly ?int $kleinanzeigenPrice,
+        public readonly ?string $kleinanzeigenId,
+        --}}
 
 
     </div>

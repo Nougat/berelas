@@ -91,6 +91,45 @@ class GrosshandelItem implements Wireable
     }
 
     /**
+     * Get the formatted Kleinanzeigen price of the item.
+    */
+    public function formattedKleinanzeigenPrice(): string
+    {
+        return $this->kleinanzeigenPrice === null
+            ? "-"
+            : number_format($this->kleinanzeigenPrice, 2, ',', '.') . " €";
+    }
+
+    public function similarityScore(KleinanzeigenAd $ad): int
+    {
+        $model = self::normalize($this->model);
+        $title = self::normalize($ad->title);
+
+        if ($model === '' || $title === '') {
+            return 0;
+        }
+
+        $requiredTitleTerms = [
+            'dockingstation',
+        ];
+
+        foreach ($requiredTitleTerms as $term) {
+            if (str_contains($model, $term) && ! str_contains($title, $term)) {
+                return 0;
+            }
+        }
+
+        return str_contains($title, $model) ? 100 : 0;
+    }
+
+    protected static function normalize(?string $value): string
+    {
+        if ($value === null) return '';
+        $value = mb_strtolower(trim($value));
+        return preg_replace('/\s+/', ' ', $value);
+    }
+
+    /**
      * Get the string representation of the item.
      */
     public function __toString(): string

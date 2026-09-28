@@ -35,6 +35,8 @@ class Kleinanzeigen
             'pageNum' => $page,
         ]);
 
+        dd($response);
+
         return $response;
 
     }

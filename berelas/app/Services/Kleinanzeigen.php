@@ -29,20 +29,29 @@ class Kleinanzeigen
     }
 
 
-    public function fetchAds(string $seller, int $page, int $adsPerPage) : string {
-        
-        $response = \Illuminate\Support\Facades\Http::withHeaders([
-            'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Content-Type' => 'application/json',
-            'Accept' => 'application/json',
-            'X-Requested-With' => 'XMLHttpRequest',
-            // 'Referer' => $baseUrl,
-            // 'Origin' => 'https://www.kleinanzeigen.de',
-        ])->post('https://www.kleinanzeigen.de/_actions/proPublicWeb.brandProfile.getAds/', [
-            'brandName' => $seller,
-            'pageSize' => $adsPerPage,
-            'pageNum' => $page,
-        ]);
+    /**
+     * Fetches ads from the Kleinanzeigen API for a given seller, page number, and number of ads per page.
+     * @param string $seller The seller's name. Optional, defaults to "berelas-it".
+     * @param int $page The page number to fetch. Optional, defaults to 1.
+     * @param int $adsPerPage The number of ads to fetch per page. Optional, defaults to 100.
+     * @return string The raw response body from the API.
+     * @throws \Exception if the HTTP request fails or returns a non-200 status code.
+     */
+    public function fetchAds(string $seller, int $page, int $adsPerPage): string
+    {
+
+        $response = Http::timeout(10)
+            ->withHeaders([
+                'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Content-Type' => 'application/json',
+                'Accept' => 'application/json',
+                'X-Requested-With' => 'XMLHttpRequest',
+            ])
+            ->post('https://www.kleinanzeigen.de/_actions/proPublicWeb.brandProfile.getAds/', [
+                'brandName' => $seller,
+                'pageSize' => $adsPerPage,
+                'pageNum' => $page,
+            ]);
 
         if ($response->failed()) {
             throw new \Exception("Failed to fetch ads from Kleinanzeigen. Status code: " . $response->status());

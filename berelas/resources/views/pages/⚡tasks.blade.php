@@ -9,18 +9,59 @@ use Livewire\Attributes\Computed;
 use Livewire\Component;
 
 new class extends Component {
-    public Collection $kleinanzeigenAds;
-    public Collection $grosshandelItems;
+    public ?Collection $kleinanzeigenAds = null;
+    public ?Collection $grosshandelItems = null;
 
+    public bool $kleinanzeigenAvailable = true;
+    public string $kleinanzeigenErrorMessage = '';
+
+    public bool $grosshandelAvailable = true;
+    public string $grosshandelErrorMessage = '';
+
+    /**
+     * Mount the component and fetch the Kleinanzeigen ads and Großhandel items.
+     * @param Kleinanzeigen $kleinanzeigen The Kleinanzeigen service to fetch ads from.
+     * @param Großhandel $grosshandel The Großhandel service to fetch items from.
+     */
     public function mount(Kleinanzeigen $kleinanzeigen, Großhandel $grosshandel)
     {
-        $this->fetch($kleinanzeigen, $grosshandel);
+        $this->kleinanzeigenAds = collect();
+        $this->grosshandelItems = collect();
+
+        $this->fetchKleinanzeigenAds($kleinanzeigen);
+        $this->fetchGrosshandelItems($grosshandel);
     }
 
-    public function fetch(Kleinanzeigen $kleinanzeigen, Großhandel $grosshandel)
+    /**
+     * Fetch the Kleinanzeigen ads and handle any errors that may occur during the fetch.
+     * @param Kleinanzeigen $kleinanzeigen The Kleinanzeigen service to fetch ads from.
+     */
+    public function fetchKleinanzeigenAds(Kleinanzeigen $kleinanzeigen)
     {
-        $this->kleinanzeigenAds = $kleinanzeigen->getAds();
-        $this->grosshandelItems = $grosshandel->getItems();
+        try {
+            $this->kleinanzeigenAds = $kleinanzeigen->getAds();
+            $this->kleinanzeigenAvailable = true;
+            $this->kleinanzeigenErrorMessage = '';
+        } catch (\Exception $e) {
+            $this->kleinanzeigenAvailable = false;
+            $this->kleinanzeigenErrorMessage = 'Error fetching Kleinanzeigen ads: ' . $e->getMessage();
+        }
+    }
+
+    /**
+     * Fetch the Großhandel items.
+     * @param Großhandel $grosshandel The Großhandel service to fetch items from.
+     */
+    public function fetchGrosshandelItems(Großhandel $grosshandel)
+    {
+        try {
+            $this->grosshandelItems = $grosshandel->getItems();
+            $this->grosshandelAvailable = true;
+            $this->grosshandelErrorMessage = '';
+        } catch (\Exception $e) {
+            $this->grosshandelAvailable = false;
+            $this->grosshandelErrorMessage = 'Error fetching Großhandel items: ' . $e->getMessage();
+        }
     }
 
     /*
@@ -35,6 +76,9 @@ new class extends Component {
     #[Computed]
     public function notListed()
     {
+        if (!$this->grosshandelAvailable) {
+            return collect();
+        }
         return $this->grosshandelItems->filter(fn(GrosshandelItem $item) => $item->kleinanzeigenPrice && !$item->kleinanzeigenId);
     }
 
@@ -45,6 +89,9 @@ new class extends Component {
     #[Computed]
     public function invalidKleinanzeigenId()
     {
+        if (!$this->grosshandelAvailable || !$this->kleinanzeigenAvailable) {
+            return collect();
+        }
         $validIds = $this->kleinanzeigenAds->pluck('id')->flip();
         return $this->grosshandelItems->filter(function (GrosshandelItem $item) use ($validIds) {
             return $item->kleinanzeigenId && !isset($validIds[$item->kleinanzeigenId]);
@@ -58,7 +105,10 @@ new class extends Component {
     #[Computed]
     public function orphanKleinanzeigenPrice()
     {
-        return $this->grosshandelItems->filter(fn(GrosshandelItem $item) => !$item->model && $item->kleinanzeigenPrice);
+        if (!$this->grosshandelAvailable) {
+            return collect();
+        }
+        return $this->grosshandelItems->filter(fn(GrosshandelItem $item) => !$item->model && ($item->kleinanzeigenPrice || $item->kleinanzeigenId));
     }
 
     /**
@@ -68,6 +118,9 @@ new class extends Component {
     #[Computed]
     public function wrongPrice()
     {
+        if (!$this->grosshandelAvailable || !$this->kleinanzeigenAvailable) {
+            return collect();
+        }
         return $this->grosshandelItems->filter(function (GrosshandelItem $item) {
             // no listing means no price to compare
             if (!$item->kleinanzeigenPrice || !$item->kleinanzeigenId) {
@@ -87,6 +140,9 @@ new class extends Component {
     #[Computed]
     public function withComment()
     {
+        if (!$this->grosshandelAvailable) {
+            return collect();
+        }
         return $this->grosshandelItems->filter(fn(GrosshandelItem $item) => $item->comment);
     }
 
@@ -98,6 +154,9 @@ new class extends Component {
     #[Computed]
     public function kleinanzeigenIdNotListed()
     {
+        if (!$this->grosshandelAvailable || !$this->kleinanzeigenAvailable) {
+            return collect();
+        }
         $listedKleinanzeigenIds = $this->grosshandelItems->pluck('kleinanzeigenId');
         return $this->kleinanzeigenAds
             ->filter(function (KleinanzeigenAd $ad) use ($listedKleinanzeigenIds) {
@@ -109,7 +168,7 @@ new class extends Component {
     /**
      * Get the KleinanzeigenAd that corresponds to a given GrosshandelItem.
      */
-    public function getKleinanzeigenAd(GrosshandelItem $item): ?KleinanzeigenAd
+    protected function getKleinanzeigenAd(GrosshandelItem $item): ?KleinanzeigenAd
     {
         return collect($this->kleinanzeigenAds)->firstWhere('id', $item->kleinanzeigenId);
     }
@@ -117,7 +176,7 @@ new class extends Component {
     /**
      * Find possible wholesale matches for a given KleinanzeigenAd.
      */
-    public function findPossibleWholesaleMatches(KleinanzeigenAd $ad): Collection
+    protected function findPossibleWholesaleMatches(KleinanzeigenAd $ad): Collection
     {
         return $this->grosshandelItems->filter(fn(GrosshandelItem $item) => $item->similarityScore($ad) === 100)->take(3);
     }
@@ -126,14 +185,17 @@ new class extends Component {
 
 <div class="p-4">
 
-    {{--
-    <span>{{ count($kleinanzeigenAds) }} Kleinanzeigen</span>
-    <br>
-    <span> {{ count($grosshandelItems) }} Großhandel </span>
+    @if ($kleinanzeigenErrorMessage)
+        <div class="mb-4 rounded-lg bg-red-100 p-4 text-red-700">
+            {{ $kleinanzeigenErrorMessage }}
+        </div>
+    @endif
 
-    <pre> {{ var_dump($kleinanzeigenAds[0]) }} </pre>
-    <pre> {{ var_dump($grosshandelItems[0]) }} </pre>
-    --}}
+    @if ($grosshandelErrorMessage)
+        <div class="mb-4 rounded-lg bg-red-100 p-4 text-red-700">
+            {{ $grosshandelErrorMessage }}
+        </div>
+    @endif
 
     {{-- Orphaned Kleinanzeigen Prices --}}
     <div class="mt-6 overflow-hidden rounded-xl border-2 border-amber-500 bg-gray-200 shadow-lg">
@@ -145,7 +207,7 @@ new class extends Component {
             </h2>
 
             <span class="shrink-0 rounded-full bg-white px-3 py-1 text-sm font-bold text-amber-700 shadow">
-                {{ count($this->orphanKleinanzeigenPrice) }}
+                {{ $this->grosshandelAvailable ? count($this->orphanKleinanzeigenPrice) : "❌" }}
             </span>
         </div>
 
@@ -220,8 +282,6 @@ new class extends Component {
         </div>
     </div>
 
-
-
     {{-- Not Listed Items --}}
     <div class="mt-6 overflow-hidden rounded-xl border-2 border-amber-500 bg-gray-200 shadow-lg">
 
@@ -232,7 +292,7 @@ new class extends Component {
             </h2>
 
             <span class="shrink-0 rounded-full bg-white px-3 py-1 text-sm font-bold text-amber-700 shadow">
-                {{ count($this->notListed) }}
+                {{ $this->grosshandelAvailable ? count($this->notListed) : "❌" }}
             </span>
         </div>
 
@@ -315,7 +375,7 @@ new class extends Component {
                 </div>
             @endforeach
         </div>
-    </div>
+    </div> 
 
 
     {{-- Invalid Kleinanzeigen IDs --}}
@@ -328,7 +388,7 @@ new class extends Component {
             </h2>
 
             <span class="shrink-0 rounded-full bg-white px-3 py-1 text-sm font-bold text-amber-700 shadow">
-                {{ count($this->invalidKleinanzeigenId) }}
+                {{ $this->grosshandelAvailable && $this->kleinanzeigenAvailable ? count($this->invalidKleinanzeigenId) : "❌" }}
             </span>
         </div>
 
@@ -439,7 +499,7 @@ new class extends Component {
             </h2>
 
             <span class="shrink-0 rounded-full bg-white px-3 py-1 text-sm font-bold text-amber-700 shadow">
-                {{ count($this->wrongPrice) }}
+                {{ $this->grosshandelAvailable && $this->kleinanzeigenAvailable ? count($this->wrongPrice) : "❌" }}
             </span>
         </div>
 
@@ -571,7 +631,7 @@ new class extends Component {
             </h2>
 
             <span class="shrink-0 rounded-full bg-white px-3 py-1 text-sm font-bold text-amber-700 shadow">
-                {{ count($this->withComment) }}
+                {{ $this->grosshandelAvailable ? count($this->withComment) : "❌" }}
             </span>
         </div>
 
@@ -678,7 +738,7 @@ new class extends Component {
             </h2>
 
             <span class="shrink-0 rounded-full bg-white px-3 py-1 text-sm font-bold text-amber-700 shadow">
-                {{ count($this->kleinanzeigenIdNotListed) }}
+                {{ $this->grosshandelAvailable && $this->kleinanzeigenAvailable ? count($this->kleinanzeigenIdNotListed) : "❌" }}
             </span>
         </div>
 

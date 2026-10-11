@@ -3,25 +3,85 @@
 use App\Services\Großhandel;
 use Illuminate\Support\Collection;
 use Livewire\Component;
+use App\Data\GrosshandelItem;
+use App\ItemListFilter\EmptyFilter;
+use App\ItemListFilter\ItemListFilter;
+use App\ItemListFilter\RamFilter;
+use App\ItemListFilter\SearchQueryParser;
+use Livewire\Attributes\Computed;
 
 new class extends Component {
+    /** @var Collection<int, GrosshandelItem> */
     public Collection $großhandelItems;
+
     public string $errorMessage = '';
     public bool $isLoading = false;
 
-    public function getItems(Großhandel $gh): Collection
+    public string $searchInput = '';
+
+    public array $checkboxFilters = [
+        'nonEmpty' => true,
+        'hasKleinanzeigen' => false,
+        'hasGpu' => false,
+        'hasRetailPrice' => false,
+    ];
+
+    public array $selectedItemsKeys = [];
+
+    #[Computed]
+    public function selectedItems(): Collection
     {
-        return $gh->getItems();
+        $selectedKeys = collect($this->selectedItemsKeys)->filter()->keys()->map(fn($key) => (int) $key);
+
+        return $this->großhandelItems->only($selectedKeys);
     }
 
-    public function getGhItemsCountProperty(): int
+    public function toggleSelectItem(int $itemKey): void
     {
-        return $this->großhandelItems->count();
+        if (isset($this->selectedItemsKeys[$itemKey])) {
+            unset($this->selectedItemsKeys[$itemKey]);
+        } else {
+            $this->selectedItemsKeys[$itemKey] = true;
+        }
+    }
+
+    public function deselectAll(): void
+    {
+        $this->selectedItemsKeys = [];
     }
 
     public function mount(Großhandel $gh)
     {
-        $this->großhandelItems = $this->getItems($gh);
+        $this->großhandelItems = $gh->getItems()->values();
+    }
+
+    #[Computed]
+    public function filterValues(): array
+    {
+        $parsed = app(SearchQueryParser::class)->parse($this->searchInput);
+        return array_merge($this->checkboxFilters, $parsed);
+    }
+
+    #[Computed]
+    public function filteredItems(): Collection
+    {
+        /** @var list<ItemListFilter<GrosshandelItem>> $filters */
+        $filters = [app(EmptyFilter::class), app(RamFilter::class)];
+
+        $items = $this->großhandelItems;
+
+        foreach ($filters as $filter) {
+            if ($filter->isActive($this->filterValues)) {
+                $items = $filter->apply($items, $this->filterValues);
+            }
+        }
+        return $items;
+    }
+
+    #[Computed]
+    public function itemCount(): int
+    {
+        return $this->filteredItems()->count();
     }
 };
 ?>
@@ -36,98 +96,119 @@ new class extends Component {
             <div class="text-2xl text-red-500">{{ $errorMessage }}</div>
         @endif
 
+        {{--
+        <pre>
+            {{ var_dump($this->filterValues) }}
+        </pre>
+        --}}
+
+        {{-- Header --}}
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900 mb-2">Großhandel</h1>
+            <p class="text-gray-700 mb-4">
+                Total items: {{ $this->großhandelItems->count() }} |
+                Filtered items: {{ $this->itemCount }}
+            </p>
+        </div>
 
         {{-- Search input and some simple filters --}}
         <div class="mb-6">
 
-            <input type="text" placeholder="Search..." wire:model="filterValues.search"
+            <input type="text" placeholder="Search..." wire:model.live.debounce.300ms="searchInput"
                 class="w-full border border-gray-300 rounded-lg py-2 px-4 focus:outline-none focus:ring-2 focus:ring-blue-500">
 
-            <div class="w-full flex justify-between">
-                <label>
-                    <input type="checkbox" wire:model="filterValues.comments" />
-                    Show only comments
-                </label>
+            <div class="w-full flex gap-2 flex-wrap mt-2 ml-2 text-sm text-gray-700">
 
                 <label>
-                    <input type="checkbox" wire:model="filterValues.orphanPrices" />
-                    Show only orphan prices
-                </label>
-
-                <label>
-                    <input type="checkbox" wire:model="filterValues.nonEmpty" />
+                    <input type="checkbox" wire:model.live="checkboxFilters.nonEmpty" />
                     Show only non-empty
                 </label>
 
                 <label>
-                    <input type="checkbox" wire:model="filterValues.kleinanzeigen">
+                    <input type="checkbox" wire:model.live="checkboxFilters.hasKleinanzeigen">
                     Show only Kleinanzeigen
                 </label>
 
                 <label>
-                    <input type="checkbox" wire:model="filterValues.notListed">
-                    Show only not listed
+                    <input type="checkbox" wire:model.live="checkboxFilters.hasGpu">
+                    Show only items with GPU
                 </label>
+
+                <label>
+                    <input type="checkbox" wire:model.live="checkboxFilters.hasRetailPrice">
+                    Show only items with retail price
+                </label>
+
             </div>
         </div>
 
 
+        <button type="button" wire:click="selectedItems->count() > 0 ? $emit('openModal', 'pages.großhandel-export-modal', ['selectedItems' => $selectedItems]) : null"
+            @class([
+                'mb-4 rounded-lg bg-blue-600 px-4 py-2 text-white transition hover:bg-blue-700',
+                'opacity-50 cursor-not-allowed' => $this->selectedItems->count() === 0,
+            ])>
+            Export selected items ({{ $this->selectedItems->count() }})
+        </button>
+
+        <button type="button" wire:click="deselectAll"
+            @class([
+                'mb-4 ml-2 rounded-lg bg-gray-600 px-4 py-2 text-white transition hover:bg-gray-700',
+                'opacity-50 cursor-not-allowed' => $this->selectedItems->count() === 0,
+            ])>
+            Deselect all ({{ $this->selectedItems->count() }})
+        </button>
+
         {{-- Items --}}
         <div class="divide-y-2 divide-gray-300">
-            @foreach ($großhandelItems as $item)
-                <div
-                    class="group px-4 py-3
-                       odd:bg-gray-100 even:bg-gray-200
-                       transition-all duration-200
-                       hover:bg-amber-100 hover:pl-6">
+            @foreach ($this->filteredItems as $key => $item)
+                <div wire:key="item-{{ $key }}" wire:click="toggleSelectItem({{ $key }})"
+                    @class([
+                        'group px-4 py-3 transition-colors duration-200',
+                        'bg-amber-200 hover:bg-amber-300 ' => !empty(
+                            $selectedItemsKeys[$key]
+                        ),
+                        'odd:bg-gray-100 even:bg-gray-200 hover:bg-amber-100' => empty(
+                            $selectedItemsKeys[$key]
+                        ),
+                    ])>
                     <div class="flex items-center gap-4">
 
                         @if ($item->shelf)
-                        {{-- Shelf --}}
-                        <span
-                            class="shrink-0 min-w-16 rounded-md
+                            {{-- Shelf --}}
+                            <span
+                                class="shrink-0 min-w-16 rounded-md
                                bg-indigo-600 px-2 py-1 text-center
                                text-xs font-bold text-white shadow-sm">
-                            {{ $item->shelf }}
-                        </span>
+                                {{ $item->shelf }}
+                            </span>
                         @endif
 
                         {{-- Item --}}
                         <div class="min-w-0 flex-1">
 
                             <div class="flex items-center gap-2">
+
+                                {{-- Display Name --}}
                                 <span class="truncate font-bold text-gray-900">
                                     {{ $item->displayName() }}
                                 </span>
 
+                                {{-- Amount --}}
                                 @if ($item->amount !== null)
-                                    <span class="shrink-0 rounded-md bg-gray-600 px-2 py-1
+                                    <span
+                                        class="shrink-0 rounded-md bg-gray-600 px-2 py-1
                                        text-xs font-bold text-white shadow-sm
                                        transition hover:bg-gray-700">
                                         x{{ $item->amount }}
                                     </span>
                                 @endif
 
-                                @if ($item->kleinanzeigenId)
-                                    {{-- Kleinanzeigen ID --}}
-                                    <a href="https://www.kleinanzeigen.de/s-anzeige/{{ $item->kleinanzeigenId }}"
-                                        target="_blank" rel="noopener noreferrer"
-                                        class="shrink-0 rounded-md bg-yellow-600 px-2 py-1
-                                       text-xs font-bold text-white shadow-sm
-                                       transition hover:bg-yellow-700"
-                                        title="Kleinanzeigen-Anzeige öffnen">
-                                        ID {{ $item->kleinanzeigenId }} 
-                                        @if ($item->kleinanzeigenPrice)
-                                            | {{ $item->kleinanzeigenPrice }}€
-                                        @endif
-                                    </a>
-                                @endif
-
-                                @if ($item->kleinanzeigenPrice && !$item->kleinanzeigenId)
-                                    <span class="shrink-0 rounded-md bg-yellow-600 px-2 py-1
-                                       text-xs font-bold text-white shadow-sm
-                                       transition hover:bg-yellow-700">
-                                        {{ $item->kleinanzeigenPrice }}€
+                                {{-- Comment --}}
+                                @if ($item->comment)
+                                    <span
+                                        class="rounded-md border-l-4 border-amber-500 bg-white px-3 py-1 text-xs font-bold text-gray-800 shadow-sm ">
+                                        {{ $item->comment }}
                                     </span>
                                 @endif
 
@@ -172,18 +253,33 @@ new class extends Component {
                                     </span>
                                 @endif
 
-                            </div>
+                                @if ($item->kleinanzeigenId)
+                                    {{-- Kleinanzeigen ID --}}
+                                    <a href="https://www.kleinanzeigen.de/s-anzeige/{{ $item->kleinanzeigenId }}"
+                                        wire:click.stop
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        class="shrink-0 rounded-md bg-yellow-600 px-2 py-1
+                                        text-xs font-bold text-white shadow-sm
+                                        transition hover:bg-yellow-700"
+                                        title="Kleinanzeigen-Anzeige öffnen">
+                                        ID {{ $item->kleinanzeigenId }}
+                                        @if ($item->kleinanzeigenPrice)
+                                            | {{ $item->kleinanzeigenPrice }}€
+                                        @endif
+                                    </a>
+                                @endif
 
-                            {{-- Comment --}}
-                            @if ($item->comment)
-                                <div
-                                    class="mt-2 flex items-start gap-2 rounded-md border-l-4 border-amber-500 bg-white px-3 py-1.5 shadow-sm">
-                                    <span class="text-sm font-medium leading-tight text-gray-800">
-                                        {{ $item->comment }}
+                                @if ($item->kleinanzeigenPrice && !$item->kleinanzeigenId)
+                                    <span
+                                        class="shrink-0 rounded-md bg-yellow-600 px-2 py-1
+                                       text-xs font-bold text-white shadow-sm
+                                       transition hover:bg-yellow-700">
+                                        {{ $item->kleinanzeigenPrice }}€
                                     </span>
-                                </div>
-                            @endif
+                                @endif
 
+                            </div>
                         </div>
 
                     </div>

@@ -12,6 +12,8 @@ class SearchQueryParser
             'search' => '',
             'cpu' => null,
             'gpu' => null,
+            'specials' => null,
+            'layout' => null,
             'ramMin' => null,
             'ramMax' => null,
             'ssdMin' => null,
@@ -21,13 +23,13 @@ class SearchQueryParser
         ];
 
         $remaining = preg_replace_callback(
-            '/(?<!\S)(cpu|ram|price|ssd):([^\s]+)/i',
+            '/(?<!\S)(cpu|gpu|specials|layout|ram|price|ssd):([^\s]+)/i',
             function (array $matches) use (&$result): string {
                 $key = strtolower($matches[1]);
                 $value = $matches[2];
 
-                if ($key === 'cpu') {
-                    $result['cpu'] = $value;
+                if (in_array($key, ['cpu', 'gpu', 'specials', 'layout'], true)) {
+                    $result[$key] = $value;
                 }
 
                 if (in_array($key, ['ram', 'ssd', 'price'], true)) {

@@ -1,15 +1,16 @@
 <?php
 
-namespace App\ItemListFilter;
+namespace App\ItemListFilter\GrosshandelItem;
 
 use App\Data\GrosshandelItem;
+use App\ItemListFilter\ItemListFilter;
 use Illuminate\Support\Collection;
 
 /**
- * Filter for RAM sizes. Filters items based on the specified minimum and maximum RAM values.
+ * Filter for SSD sizes. Filters items based on the specified minimum and maximum SSD values.
  * @implements ItemListFilter<GrosshandelItem>
  */
-class RamFilter implements ItemListFilter
+class SsdFilter implements ItemListFilter
 {
 
     /**
@@ -19,36 +20,35 @@ class RamFilter implements ItemListFilter
      */
     public function isActive(array $filterValues): bool
     {
-        return $filterValues['ramMin'] !== null || $filterValues['ramMax'] !== null;
+        return $filterValues['ssdMin'] !== null || $filterValues['ssdMax'] !== null;
     }
 
     /**
      * Apply the filter to the collection of items.
      * @param Collection<GrosshandelItem> $items
      * @param array $filterValues
-     * @return Collection<GrosshandelItem> Filtered collection of items based on RAM size.
+     * @return Collection<GrosshandelItem> Filtered collection of items based on SSD size.
      */
     public function apply(Collection $items, array $filterValues): Collection
     {
         return $items->filter(function (GrosshandelItem $item) use ($filterValues) {
             
-            $ramMin = $filterValues['ramMin'];
-            $ramMax = $filterValues['ramMax'];
+            $ssdMin = $filterValues['ssdMin'];
+            $ssdMax = $filterValues['ssdMax'];
 
-            if ($item->ram === null) {
+            if ($item->ssd === null) {
                 return false;
             }
 
-            if ($ramMin !== null && $item->ram < $ramMin) {
+            if ($ssdMin !== null && $item->ssd < $ssdMin) {
                 return false;
             }
 
-            if ($ramMax !== null && $item->ram > $ramMax) {
+            if ($ssdMax !== null && $item->ssd > $ssdMax) {
                 return false;
             }
 
             return true;
         });
     }
-    
 }

@@ -1,6 +1,6 @@
 <?php
 
-namespace App\ItemListFilter;
+namespace App\ItemListFilter\GrosshandelItem;
 
 use App\Data\GrosshandelItem;
 use App\ItemListFilter\ItemListFilter;

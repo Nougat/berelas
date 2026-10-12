@@ -1,6 +1,6 @@
 <?php
 
-use App\Services\Großhandel;
+use App\Services\GroßhandelService;
 use App\Data\GrosshandelItem;
 use App\ItemListFilter\GrosshandelItem\CpuFilter;
 use App\ItemListFilter\GrosshandelItem\DisplayNameFilter;
@@ -61,9 +61,11 @@ new class extends Component {
         $this->selectedItemsKeys = [];
     }
 
-    public function mount(Großhandel $gh)
+    public function mount(GroßhandelService $gh)
     {
-        $this->großhandelItems = $gh->getItems()->values();
+        $this->großhandelItems = $gh->getItems()
+            ->sortBy(fn(GrosshandelItem $item) => $item->shelf ?? PHP_INT_MAX) 
+            ->values();
     }
 
     #[Computed]

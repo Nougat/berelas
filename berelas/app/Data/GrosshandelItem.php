@@ -14,7 +14,7 @@ class GrosshandelItem implements Wireable
      * Create a new class instance.
      */
     private function __construct(
-        public readonly ?int $shelf,
+        public readonly ?string $shelf,
         public readonly ?string $manufacturer,
         public readonly ?string $model,
         public readonly ?string $cpu,
@@ -37,7 +37,7 @@ class GrosshandelItem implements Wireable
     public static function fromArray(array $data): self
     {
         return new self(
-            shelf: self::int($data['shelf'] ?? null),
+            shelf: self::string($data['shelf'] ?? null),
             manufacturer: self::string($data['manufacturer'] ?? null),
             model: self::string($data['model'] ?? null),
             cpu: self::string($data['cpu'] ?? null),

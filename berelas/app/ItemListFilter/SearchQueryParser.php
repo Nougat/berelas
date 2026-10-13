@@ -20,13 +20,29 @@ class SearchQueryParser
             'ssdMax' => null,
             'priceMin' => null,
             'priceMax' => null,
+            'shelfMin' => null,
+            'shelfMax' => null,
         ];
 
         $remaining = preg_replace_callback(
-            '/(?<!\S)(cpu|gpu|specials|layout|ram|price|ssd):([^\s]+)/i',
+            '/(?<!\S)(cpu|gpu|specials|layout|ram|price|ssd|shelf):([^\s]+)/i',
             function (array $matches) use (&$result): string {
                 $key = strtolower($matches[1]);
                 $value = $matches[2];
+
+                if ($key === 'shelf') {
+                    if (preg_match('/^(.+)-(.+)$/', $value, $range)) {
+                        // Fachbereich, z. B. 512A-512C
+                        $result['shelfMin'] = $range[1];
+                        $result['shelfMax'] = $range[2];
+                    } else {
+                        // Einzelnes Fach, z. B. 512A
+                        $result['shelfMin'] = $value;
+                        $result['shelfMax'] = $value;
+                    }
+
+                    return '';
+                }
 
                 if (in_array($key, ['cpu', 'gpu', 'specials', 'layout'], true)) {
                     $result[$key] = $value;
@@ -40,6 +56,9 @@ class SearchQueryParser
                             // Einzelwert
                             if ($key === 'price') {
                                 $result[$maxKey] = (int) $range[3];
+                            } elseif ($key === 'shelf') {
+                                $result['shelfMin'] = $value;
+                                $result['shelfMax'] = $value;
                             } else {
                                 $result[$minKey] = (int) $range[3];
                             }

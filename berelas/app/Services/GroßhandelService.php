@@ -23,7 +23,10 @@ class GroßhandelService
         $items = collect();
 
         foreach ($this->gids as $tabName => $gid) {
-            $gvizUrl = "https://docs.google.com/spreadsheets/d/{$this->sheetId}/gviz/tq?gid={$gid}&tqx=out:json";
+            $gvizUrl = "https://docs.google.com/spreadsheets/d/{$this->sheetId}/gviz/tq"
+            . "?gid={$gid}"
+            // . "&tq=" . urlencode("select A, B, C, D, E, F, G, H, I, J, K, L, M, N, O")
+            . "&tqx=out:json";
             $itemsJson = $this->fetchItems($gvizUrl);
             $itemsFromSheet = $this->parseItems($itemsJson, $tabName);
             $items = $items->merge($itemsFromSheet);
@@ -48,6 +51,7 @@ class GroßhandelService
     public function parseItems(string $json, string $tabName): Collection
     {
         $data = json_decode($json, true);
+
         $headers = [
             "main" => [
                 'shelf',

@@ -18,6 +18,7 @@ use App\ItemListFilter\GrosshandelItem\HasRetailPriceFilter;
 use App\ItemListFilter\GrosshandelItem\LayoutFilter;
 use App\ItemListFilter\GrosshandelItem\PriceFilter;
 use App\ItemListFilter\GrosshandelItem\RamFilter;
+use App\ItemListFilter\GrosshandelItem\ShelfFilter;
 use App\ItemListFilter\GrosshandelItem\SpecialsFilter;
 use App\ItemListFilter\GrosshandelItem\SsdFilter;
 
@@ -63,8 +64,24 @@ new class extends Component {
 
     public function mount(GroßhandelService $gh)
     {
-        $this->großhandelItems = $gh->getItems()
-            ->sortBy(fn(GrosshandelItem $item) => $item->shelf ?? PHP_INT_MAX) 
+        $this->großhandelItems = $gh
+            ->getItems()
+            ->sort(function (GrosshandelItem $a, GrosshandelItem $b) {
+                $shelfA = $a->shelf;
+                $shelfB = $b->shelf;
+
+                // Einträge ohne Fach nach hinten sortieren
+                if (empty($shelfA) && !empty($shelfB)) {
+                    return 1;
+                }
+
+                if (!empty($shelfA) && empty($shelfB)) {
+                    return -1;
+                }
+
+                // Beide ohne Fach oder beide mit Fach
+                return strnatcasecmp($shelfA ?? '', $shelfB ?? '');
+            })
             ->values();
     }
 
@@ -79,20 +96,7 @@ new class extends Component {
     public function filteredItems(): Collection
     {
         /** @var list<ItemListFilter<GrosshandelItem>> $filters */
-        $filters = [
-            app(EmptyFilter::class),
-            app(RamFilter::class),
-            app(SsdFilter::class),
-            app(PriceFilter::class),
-            app(HasRetailPriceFilter::class),
-            app(HasKleinanzeigenFilter::class),
-            app(HasGpuFilter::class),
-            app(GpuFilter::class),
-            app(LayoutFilter::class),
-            app(SpecialsFilter::class), 
-            app(CpuFilter::class),
-            app(DisplayNameFilter::class),
-        ];
+        $filters = [app(EmptyFilter::class), app(RamFilter::class), app(SsdFilter::class), app(PriceFilter::class), app(HasRetailPriceFilter::class), app(HasKleinanzeigenFilter::class), app(HasGpuFilter::class), app(GpuFilter::class), app(LayoutFilter::class), app(SpecialsFilter::class), app(CpuFilter::class), app(DisplayNameFilter::class), app(ShelfFilter::class)];
 
         $items = $this->großhandelItems;
 
@@ -119,10 +123,10 @@ new class extends Component {
 
         <!-- Error -->
         @if ($errorMessage)
-        <div class="text-2xl text-red-500">{{ $errorMessage }}</div>
+            <div class="text-2xl text-red-500">{{ $errorMessage }}</div>
         @endif
 
-        {{-- 
+        {{--
         <pre>
             {{ var_dump($this->filterValues) }}
         </pre>
@@ -169,147 +173,149 @@ new class extends Component {
         </div>
 
 
-        <button type="button" wire:click="selectedItems->count() > 0 ? $emit('openModal', 'pages.großhandel-export-modal', ['selectedItems' => $selectedItems]) : null"
-            @class([ 'mb-4 rounded-lg bg-blue-600 px-4 py-2 text-white transition hover:bg-blue-700' , 'opacity-50 cursor-not-allowed'=> $this->selectedItems->count() === 0,
+        <button type="button"
+            wire:click="selectedItems->count() > 0 ? $emit('openModal', 'pages.großhandel-export-modal', ['selectedItems' => $selectedItems]) : null"
+            @class([
+                'mb-4 rounded-lg bg-blue-600 px-4 py-2 text-white transition hover:bg-blue-700',
+                'opacity-50 cursor-not-allowed' => $this->selectedItems->count() === 0,
             ])>
             Export selected items ({{ $this->selectedItems->count() }})
         </button>
 
-        <button type="button" wire:click="deselectAll"
-            @class([ 'mb-4 ml-2 rounded-lg bg-gray-600 px-4 py-2 text-white transition hover:bg-gray-700' , 'opacity-50 cursor-not-allowed'=> $this->selectedItems->count() === 0,
-            ])>
+        <button type="button" wire:click="deselectAll" @class([
+            'mb-4 ml-2 rounded-lg bg-gray-600 px-4 py-2 text-white transition hover:bg-gray-700',
+            'opacity-50 cursor-not-allowed' => $this->selectedItems->count() === 0,
+        ])>
             Deselect all ({{ $this->selectedItems->count() }})
         </button>
 
         {{-- Items --}}
         <div class="divide-y-2 divide-gray-300">
             @foreach ($this->filteredItems as $key => $item)
-            <div wire:key="item-{{ $key }}" wire:click="toggleSelectItem({{ $key }})"
-                @class([ 'group px-4 py-3 transition-colors duration-200' , 'bg-amber-200 hover:bg-amber-300 '=> !empty(
-                $selectedItemsKeys[$key]
-                ),
-                'odd:bg-gray-100 even:bg-gray-200 hover:bg-amber-100' => empty(
-                $selectedItemsKeys[$key]
-                ),
-                ])>
-                <div class="flex items-center gap-4">
+                <div wire:key="item-{{ $key }}" wire:click="toggleSelectItem({{ $key }})"
+                    @class([
+                        'group px-4 py-3 transition-colors duration-200',
+                        'bg-amber-200 hover:bg-amber-300 ' => !empty($selectedItemsKeys[$key]),
+                        'odd:bg-gray-100 even:bg-gray-200 hover:bg-amber-100' => empty(
+                            $selectedItemsKeys[$key]
+                        ),
+                    ])>
+                    <div class="flex items-center gap-4">
 
-                    @if ($item->shelf)
-                    {{-- Shelf --}}
-                    <span
-                        class="shrink-0 min-w-16 rounded-md
+                        @if ($item->shelf)
+                            {{-- Shelf --}}
+                            <span
+                                class="shrink-0 min-w-16 rounded-md
                                bg-indigo-600 px-2 py-1 text-center
                                text-xs font-bold text-white shadow-sm">
-                        {{ $item->shelf }}
-                    </span>
-                    @endif
-
-                    {{-- Item --}}
-                    <div class="min-w-0 flex-1">
-
-                        <div class="flex items-center gap-2">
-
-                            {{-- Display Name --}}
-                            <span class="truncate font-bold text-gray-900">
-                                {{ $item->displayName() }}
+                                {{ $item->shelf }}
                             </span>
+                        @endif
 
-                            {{-- Amount --}}
-                            @if ($item->amount !== null)
-                            <span
-                                class="shrink-0 rounded-md bg-gray-600 px-2 py-1
+                        {{-- Item --}}
+                        <div class="min-w-0 flex-1">
+
+                            <div class="flex items-center gap-2">
+
+                                {{-- Display Name --}}
+                                <span class="truncate font-bold text-gray-900">
+                                    {{ $item->displayName() }}
+                                </span>
+
+                                {{-- Amount --}}
+                                @if ($item->amount !== null)
+                                    <span
+                                        class="shrink-0 rounded-md bg-gray-600 px-2 py-1
                                        text-xs font-bold text-white shadow-sm
                                        transition hover:bg-gray-700">
-                                x{{ $item->amount }}
-                            </span>
-                            @endif
+                                        x{{ $item->amount }}
+                                    </span>
+                                @endif
 
-                            {{-- Comment --}}
-                            @if ($item->comment)
-                            <span
-                                class="rounded-md border-l-4 border-amber-500 bg-white px-3 py-1 text-xs font-bold text-gray-800 shadow-sm ">
-                                {{ $item->comment }}
-                            </span>
-                            @endif
+                                {{-- Comment --}}
+                                @if ($item->comment)
+                                    <span
+                                        class="rounded-md border-l-4 border-amber-500 bg-white px-3 py-1 text-xs font-bold text-gray-800 shadow-sm ">
+                                        {{ $item->comment }}
+                                    </span>
+                                @endif
 
-                        </div>
+                            </div>
 
-                        {{-- Specs --}}
-                        <div class="mt-1 flex flex-wrap gap-1.5 text-xs">
+                            {{-- Specs --}}
+                            <div class="mt-1 flex flex-wrap gap-1.5 text-xs">
 
-                            @if ($item->cpu)
-                            <span class="rounded bg-blue-600 px-2 py-1 font-medium text-white">
-                                {{ $item->cpu }}
-                            </span>
-                            @endif
+                                @if ($item->cpu)
+                                    <span class="rounded bg-blue-600 px-2 py-1 font-medium text-white">
+                                        {{ $item->cpu }}
+                                    </span>
+                                @endif
 
-                            @if ($item->ram)
-                            <span class="rounded bg-emerald-600 px-2 py-1 font-medium text-white">
-                                {{ $item->ram }} GB RAM
-                            </span>
-                            @endif
+                                @if ($item->ram)
+                                    <span class="rounded bg-emerald-600 px-2 py-1 font-medium text-white">
+                                        {{ $item->ram }} GB RAM
+                                    </span>
+                                @endif
 
-                            @if ($item->ssd)
-                            <span class="rounded bg-violet-600 px-2 py-1 font-medium text-white">
-                                {{ $item->ssd }} GB SSD
-                            </span>
-                            @endif
+                                @if ($item->ssd)
+                                    <span class="rounded bg-violet-600 px-2 py-1 font-medium text-white">
+                                        {{ $item->ssd }} GB SSD
+                                    </span>
+                                @endif
 
-                            @if ($item->gpu)
-                            <span class="rounded bg-red-600 px-2 py-1 font-medium text-white">
-                                {{ $item->gpu }}
-                            </span>
-                            @endif
+                                @if ($item->gpu)
+                                    <span class="rounded bg-red-600 px-2 py-1 font-medium text-white">
+                                        {{ $item->gpu }}
+                                    </span>
+                                @endif
 
-                            @if ($item->specials)
-                            <span class="rounded bg-pink-600 px-2 py-1 font-medium text-white">
-                                {{ $item->specials }}
-                            </span>
-                            @endif
+                                @if ($item->specials)
+                                    <span class="rounded bg-pink-600 px-2 py-1 font-medium text-white">
+                                        {{ $item->specials }}
+                                    </span>
+                                @endif
 
-                            @if ($item->layout)
-                            <span class="rounded bg-cyan-600 px-2 py-1 font-medium text-white">
-                                {{ $item->layout }}
-                            </span>
-                            @endif
+                                @if ($item->layout)
+                                    <span class="rounded bg-cyan-600 px-2 py-1 font-medium text-white">
+                                        {{ $item->layout }}
+                                    </span>
+                                @endif
 
-                            @if ($item->condition)
-                            <span class="rounded bg-gray-600 px-2 py-1 font-medium text-white">
-                                {{ $item->condition }}
-                            </span>
-                            @endif
+                                @if ($item->condition)
+                                    <span class="rounded bg-gray-600 px-2 py-1 font-medium text-white">
+                                        {{ $item->condition }}
+                                    </span>
+                                @endif
 
-                            @if ($item->kleinanzeigenId)
-                            {{-- Kleinanzeigen ID --}}
-                            <a href="https://www.kleinanzeigen.de/s-anzeige/{{ $item->kleinanzeigenId }}"
-                                wire:click.stop
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                class="shrink-0 rounded-md bg-yellow-600 px-2 py-1
+                                @if ($item->kleinanzeigenId)
+                                    {{-- Kleinanzeigen ID --}}
+                                    <a href="https://www.kleinanzeigen.de/s-anzeige/{{ $item->kleinanzeigenId }}"
+                                        wire:click.stop target="_blank" rel="noopener noreferrer"
+                                        class="shrink-0 rounded-md bg-yellow-600 px-2 py-1
                                         text-xs font-bold text-white shadow-sm
                                         transition hover:bg-yellow-700"
-                                title="Kleinanzeigen-Anzeige öffnen">
-                                ID {{ $item->kleinanzeigenId }}
-                                @if ($item->kleinanzeigenPrice)
-                                | {{ $item->kleinanzeigenPrice }}€
+                                        title="Kleinanzeigen-Anzeige öffnen">
+                                        ID {{ $item->kleinanzeigenId }}
+                                        @if ($item->kleinanzeigenPrice)
+                                            | {{ $item->kleinanzeigenPrice }}€
+                                        @endif
+                                    </a>
                                 @endif
-                            </a>
-                            @endif
 
-                            @if ($item->kleinanzeigenPrice && !$item->kleinanzeigenId)
-                            <span
-                                class="shrink-0 rounded-md bg-yellow-600 px-2 py-1
+                                @if ($item->kleinanzeigenPrice && !$item->kleinanzeigenId)
+                                    <span
+                                        class="shrink-0 rounded-md bg-yellow-600 px-2 py-1
                                        text-xs font-bold text-white shadow-sm
                                        transition hover:bg-yellow-700">
-                                {{ $item->kleinanzeigenPrice }}€
-                            </span>
-                            @endif
+                                        {{ $item->kleinanzeigenPrice }}€
+                                    </span>
+                                @endif
 
+                            </div>
                         </div>
-                    </div>
 
+                    </div>
                 </div>
-            </div>
             @endforeach
         </div>
 

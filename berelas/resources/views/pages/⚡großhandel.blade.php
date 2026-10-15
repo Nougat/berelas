@@ -172,23 +172,6 @@ new class extends Component {
             </div>
         </div>
 
-
-        <button type="button"
-            wire:click="selectedItems->count() > 0 ? $emit('openModal', 'pages.großhandel-export-modal', ['selectedItems' => $selectedItems]) : null"
-            @class([
-                'mb-4 rounded-lg bg-blue-600 px-4 py-2 text-white transition hover:bg-blue-700',
-                'opacity-50 cursor-not-allowed' => $this->selectedItems->count() === 0,
-            ])>
-            Export selected items ({{ $this->selectedItems->count() }})
-        </button>
-
-        <button type="button" wire:click="deselectAll" @class([
-            'mb-4 ml-2 rounded-lg bg-gray-600 px-4 py-2 text-white transition hover:bg-gray-700',
-            'opacity-50 cursor-not-allowed' => $this->selectedItems->count() === 0,
-        ])>
-            Deselect all ({{ $this->selectedItems->count() }})
-        </button>
-
         {{-- Items --}}
         <div class="divide-y-2 divide-gray-300">
             @foreach ($this->filteredItems as $key => $item)
@@ -318,6 +301,85 @@ new class extends Component {
                 </div>
             @endforeach
         </div>
+
+        {{-- Floating action menu --}}
+        @if ($this->selectedItems->isNotEmpty())
+            <div x-data="{ open: false }" x-on:keydown.escape.window="open = false"
+                class="fixed bottom-6 right-6 z-50 w-72">
+                {{-- Expandable actions --}}
+                <div x-cloak x-show="open" x-transition:enter="transition ease-out duration-250"
+                    x-transition:enter-start="opacity-0 translate-y-4 scale-95"
+                    x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+                    x-transition:leave="transition ease-in duration-200"
+                    x-transition:leave-start="opacity-100 translate-y-0 scale-100"
+                    x-transition:leave-end="opacity-0 translate-y-4 scale-95"
+                    class="mb-3 overflow-hidden rounded-xl border
+                   border-gray-700 bg-gray-900 p-2
+                   text-white shadow-2xl">
+                    @php
+                        $actions = [
+                            ['icon' => '🏷️', 'label' => 'Label erstellen'],
+                            ['icon' => '🖨️', 'label' => 'A6-Schilder erstellen'],
+                            ['icon' => '📋', 'label' => 'Kleinanzeigen-Liste'],
+                            ['icon' => '📊', 'label' => 'Excel-Export'],
+                        ];
+                    @endphp
+
+                    @foreach ($actions as $action)
+                        <button type="button" wire:key="selection-action-{{ $loop->index }}"
+                            x-on:click="open = false"
+                            class="flex w-full items-center gap-3
+                           rounded-lg px-3 py-3 text-left
+                           transition hover:bg-gray-700
+                           focus:outline-none focus:ring-2
+                           focus:ring-blue-500">
+                            <span class="text-xl">{{ $action['icon'] }}</span>
+                            <span class="font-medium">{{ $action['label'] }}</span>
+                            <span class="ml-auto text-gray-500">›</span>
+                        </button>
+                    @endforeach
+                </div>
+
+                {{-- Main toggle button --}}
+                <button type="button" x-on:click="open = !open"
+                    class="flex w-full items-center gap-3
+                   rounded-xl bg-blue-600 px-4 py-3
+                   text-left text-white shadow-xl
+                   transition hover:bg-blue-700
+                   focus:outline-none focus:ring-2
+                   focus:ring-blue-400 focus:ring-offset-2"
+                    :aria-expanded="open">
+                    <span
+                        class="flex h-10 w-10 items-center
+                         justify-center rounded-lg bg-blue-500">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 transition-transform duration-200"
+                            :class="{ 'rotate-180': open }" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                            stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </span>
+
+                    <span class="flex-1">
+                        <span class="block font-semibold">
+                            {{ $this->selectedItems->count() }}
+                            Artikel ausgewählt
+                        </span>
+                        <span class="block text-xs text-blue-100">
+                            Aktionen {{ 'anzeigen' }}
+                        </span>
+                    </span>
+                </button>
+
+                {{-- Deselect all --}}
+                <button type="button" wire:click="deselectAll" x-on:click="open = false"
+                    class="mt-2 w-full rounded-lg border
+                   border-gray-300 bg-white px-3 py-2
+                   text-sm text-gray-600 shadow-sm
+                   transition hover:bg-gray-100">
+                    Auswahl aufheben
+                </button>
+            </div>
+        @endif
 
         {{--
         public readonly ?int $shelf,

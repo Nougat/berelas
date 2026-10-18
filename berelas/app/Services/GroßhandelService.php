@@ -99,6 +99,7 @@ class GroßhandelService
                 'kleinanzeigenId',
             ],
             "shop" => [
+                'shelf',
                 'manufacturer',
                 'model',
                 'cpu',

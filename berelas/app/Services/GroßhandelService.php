@@ -13,7 +13,6 @@ class GroßhandelService
         "main" => "1469501021",
         "tiny" => "1411540712",
         "smartphones" => "1567882437",
-        "shop" => "1847407604"
     ];
 
 

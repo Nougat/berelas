@@ -116,12 +116,18 @@ new class extends Component {
             display: none;
         }
 
+        @page {
+            size: A4 portrait;
+            margin: 0;
+        }
+
         @media print {
 
             html,
             body {
                 margin: 0 !important;
                 padding: 0 !important;
+                width: 210mm !important;
                 height: auto !important;
                 overflow: visible !important;
             }
@@ -131,23 +137,35 @@ new class extends Component {
             }
 
             .print-root {
-                display: block;
-                margin: 0;
-                padding: 0;
+                display: block !important;
+                margin: 0 !important;
+                padding: 0 !important;
             }
 
-            .print-root .sign {
-                width: 105mm;
-                height: 147.8mm;
+            .print-sheet {
+                width: 210mm;
+                height: 297mm;
+                display: grid;
+                grid-template-columns: 105mm 105mm;
+                grid-template-rows: 148mm 148mm;
+                gap: 0;
                 overflow: hidden;
-                break-inside: avoid;
                 break-after: page;
                 page-break-after: always;
             }
 
-            .print-root .sign:last-child {
+            .print-sheet:last-child {
                 break-after: auto;
                 page-break-after: auto;
+            }
+
+            .print-sheet .sign {
+                width: 105mm;
+                height: 148mm;
+                margin: 0;
+                overflow: hidden;
+                box-sizing: border-box;
+                break-inside: avoid;
             }
         }
     </style>
@@ -222,8 +240,12 @@ new class extends Component {
 
     <template x-teleport="body">
         <div class="print-root">
-            @foreach ($signs as $sign)
-                @include('sign-gallery.sign', ['sign' => $sign])
+            @foreach (collect($signs)->values()->chunk(4) as $sheet)
+                <div class="print-sheet">
+                    @foreach ($sheet as $sign)
+                        @include('sign-gallery.sign', ['sign' => $sign])
+                    @endforeach
+                </div>
             @endforeach
         </div>
     </template>

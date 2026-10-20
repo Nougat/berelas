@@ -11,3 +11,5 @@ Route::livewire('/großhandel', 'pages::großhandel');
 Route::livewire('/aufgaben', 'pages::tasks');
 Route::livewire('/apple', 'pages::apple');
 Route::livewire('/inventory', 'pages::inventory');
+
+Route::livewire('/service', 'pages::service-orders');

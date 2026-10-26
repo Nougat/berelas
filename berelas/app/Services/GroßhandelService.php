@@ -13,6 +13,7 @@ class GroßhandelService
         "main" => "1469501021",
         "tiny" => "1411540712",
         "smartphones" => "1567882437",
+        "accesoires" => "1283099629",
     ];
 
 
@@ -113,6 +114,17 @@ class GroßhandelService
                 'comment',
                 'kleinanzeigenId',
             ],
+            "accesoires" => [
+                'shelf',
+                'manufacturer',
+                'model',
+                'amount',
+                'specials',
+                'price',
+                'comment',
+                'kleinanzeigenPrice',
+                'kleinanzeigenId',
+            ]
         ];
 
         return collect($data['table']['rows'])

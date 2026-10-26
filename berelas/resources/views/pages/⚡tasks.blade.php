@@ -3,6 +3,7 @@
 use App\Data\GrosshandelItem;
 use App\Data\KleinanzeigenAd;
 use App\Services\Großhandel;
+use App\Services\GroßhandelService;
 use App\Services\Kleinanzeigen;
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Computed;
@@ -21,9 +22,9 @@ new class extends Component {
     /**
      * Mount the component and fetch the Kleinanzeigen ads and Großhandel items.
      * @param Kleinanzeigen $kleinanzeigen The Kleinanzeigen service to fetch ads from.
-     * @param Großhandel $grosshandel The Großhandel service to fetch items from.
+     * @param GroßhandelService $grosshandel The Großhandel service to fetch items from.
      */
-    public function mount(Kleinanzeigen $kleinanzeigen, Großhandel $grosshandel)
+    public function mount(Kleinanzeigen $kleinanzeigen, GroßhandelService $grosshandel)
     {
         $this->kleinanzeigenAds = collect();
         $this->grosshandelItems = collect();
@@ -50,9 +51,9 @@ new class extends Component {
 
     /**
      * Fetch the Großhandel items.
-     * @param Großhandel $grosshandel The Großhandel service to fetch items from.
+     * @param GroßhandelService $grosshandel The Großhandel service to fetch items from.
      */
-    public function fetchGrosshandelItems(Großhandel $grosshandel)
+    public function fetchGrosshandelItems(GroßhandelService $grosshandel)
     {
         try {
             $this->grosshandelItems = $grosshandel->getItems();
@@ -356,6 +357,12 @@ new class extends Component {
                                 @if ($item->condition)
                                     <span class="rounded bg-gray-600 px-2 py-1 font-medium text-white">
                                         {{ $item->condition }}
+                                    </span>
+                                @endif
+
+                                @if ($item->kleinanzeigenPrice)
+                                    <span class="rounded bg-yellow-600 px-2 py-1 font-medium text-white">
+                                        {{ $item->kleinanzeigenPrice }}€
                                     </span>
                                 @endif
 

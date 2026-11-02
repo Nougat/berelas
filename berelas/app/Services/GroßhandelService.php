@@ -13,26 +13,44 @@ class GroßhandelService
         "main" => "1469501021",
         "tiny" => "1411540712",
         "smartphones" => "1567882437",
-        "accesoires" => "1283099629",
+        "accessories" => "1283099629",
     ];
 
 
     public function getItems(): Collection
     {
 
-        $items = collect();
+        // Fetch and parse items from main sheet
+        $mainItems = $this->parseItems(
+            $this->fetchItems($this->getGvizUrl($this->gids['main'])),
+            'main'
+        );
 
+        
+        $tabItems = collect();
         foreach ($this->gids as $tabName => $gid) {
-            $gvizUrl = "https://docs.google.com/spreadsheets/d/{$this->sheetId}/gviz/tq"
-            . "?gid={$gid}"
-            // . "&tq=" . urlencode("select A, B, C, D, E, F, G, H, I, J, K, L, M, N, O")
-            . "&tqx=out:json";
-            $itemsJson = $this->fetchItems($gvizUrl);
-            $itemsFromSheet = $this->parseItems($itemsJson, $tabName);
-            $items = $items->merge($itemsFromSheet);
+            
+            // Skip the main tab as it's already processed
+            if ($tabName === 'main') continue;
+
+            // Fetch and parse items from the current tab
+            $itemsFromTab = $this->parseItems(
+                $this->fetchItems($this->getGvizUrl($gid)),
+                $tabName
+            );
+
+            // Concatenate the filtered items from the current tab to the main collection
+            $tabItems = $tabItems->concat($itemsFromTab);
         }
 
-        return $items;
+        // Filter out main items that have no item data and are also present in tab items
+        $mainItems = $mainItems->filter(function (GrosshandelItem $item) use ($tabItems) {
+            return $item->hasItemData() || $tabItems->doesntContain('shelf', $item->shelf);
+        });
+
+        // Merge main items with tab items
+        return $mainItems->concat($tabItems);
+
     }
 
 
@@ -98,23 +116,7 @@ class GroßhandelService
                 'kleinanzeigenPrice',
                 'kleinanzeigenId',
             ],
-            "shop" => [
-                'shelf',
-                'manufacturer',
-                'model',
-                'cpu',
-                'ram',
-                'ssd',
-                'gpu',
-                'amount',
-                'condition',
-                'specials',
-                'layout',
-                'kleinanzeigenPrice',
-                'comment',
-                'kleinanzeigenId',
-            ],
-            "accesoires" => [
+            "accessories" => [
                 'shelf',
                 'manufacturer',
                 'model',
@@ -137,9 +139,32 @@ class GroßhandelService
             });
     }
 
+
     /*
     |------------------------------------------------------------------------
     | Helper Functions
     |------------------------------------------------------------------------
     */
+
+    /**
+     * Get the URL for fetching Google Visualization data.
+     * @param string $gid The Google Sheet GID for the specific tab.
+     * @return string The constructed URL for fetching data.
+     */
+    private function getGvizUrl(string $gid): string
+    {
+        return "https://docs.google.com/spreadsheets/d/{$this->sheetId}/gviz/tq"
+            . "?gid={$gid}&tqx=out:json";
+    }
+
+    /**
+     * Normalize the shelf value by trimming whitespace and converting to lowercase.
+     * @param string|null $shelf The shelf value to normalize.
+     * @return string|null The normalized shelf value or null if empty.
+     */
+    private function normalizeShelf(?string $shelf): ?string
+    {
+        $shelf = mb_strtolower(trim($shelf ?? ''));
+        return $shelf !== '' ? $shelf : null;
+    }
 }

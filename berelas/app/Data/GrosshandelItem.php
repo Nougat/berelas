@@ -31,8 +31,16 @@ class GrosshandelItem implements Wireable
         public readonly ?string $kleinanzeigenId,
     ) {}
 
+    /*
+    |------------------------------------------------------------------------
+    | Array Serialization
+    |------------------------------------------------------------------------
+    */
+
     /**
      * Create object from array.
+     * @param array<string, mixed> $data
+     * @return self
      */
     public static function fromArray(array $data): self
     {
@@ -57,6 +65,7 @@ class GrosshandelItem implements Wireable
 
     /** 
      * Export object to array.
+     * @return array<string, mixed>
      */
     public function toArray(): array
     {
@@ -68,6 +77,27 @@ class GrosshandelItem implements Wireable
     | Helper Functions
     |------------------------------------------------------------------------
     */
+
+    /**
+     * Check if the GrosshandelItem has any non-empty data fields.
+     * @return bool True if the item has any non-empty fields, false otherwise.
+     */
+    public function hasItemData(): bool
+    {
+        return collect([
+            $this->model,
+            $this->cpu,
+            $this->ram,
+            $this->ssd,
+            $this->gpu,
+            $this->amount,
+            $this->condition,
+            $this->specials,
+            $this->layout,
+            $this->price,
+            $this->comment,
+        ])->contains(fn($value) => filled($value));
+    }
 
     /**
      * Get the display name of the item.
@@ -99,6 +129,8 @@ class GrosshandelItem implements Wireable
             ? "-"
             : number_format($this->kleinanzeigenPrice, 2, ',', '.') . " €";
     }
+
+
 
     public function similarityScore(KleinanzeigenAd $ad): int
     {

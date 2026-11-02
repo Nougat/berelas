@@ -115,6 +115,7 @@ new class extends Component {
         return $this->filteredItems()->count();
     }
 
+
     /*
      * SignGallery
      */

@@ -1,339 +1,657 @@
 <?php
 
-use App\Models\InventoryItem;
-use Livewire\Attributes\On;
+use App\Data\InventoryItem;
+use App\Data\InventoryItemLike;
+use App\Data\SourcedInventoryItem;
+
+use App\ItemListFilter\GrosshandelItem\CpuFilter;
+use App\ItemListFilter\GrosshandelItem\DisplayNameFilter;
+use Illuminate\Support\Collection;
 use Livewire\Component;
+use Livewire\Attributes\Computed;
 
-new class extends Component
-{
-    public bool $showForm = false;
-    public ?string $editingId = null;
+use App\ItemListFilter\ItemListFilter;
+use App\ItemListFilter\SearchQueryParser;
+use App\ItemListFilter\GrosshandelItem\EmptyFilter;
+use App\ItemListFilter\GrosshandelItem\GpuFilter;
+use App\ItemListFilter\GrosshandelItem\HasGpuFilter;
+use App\ItemListFilter\GrosshandelItem\HasKleinanzeigenFilter;
+use App\ItemListFilter\GrosshandelItem\HasRetailPriceFilter;
+use App\ItemListFilter\GrosshandelItem\LayoutFilter;
+use App\ItemListFilter\GrosshandelItem\PriceFilter;
+use App\ItemListFilter\GrosshandelItem\RamFilter;
+use App\ItemListFilter\GrosshandelItem\ShelfFilter;
+use App\ItemListFilter\GrosshandelItem\SpecialsFilter;
+use App\ItemListFilter\GrosshandelItem\SsdFilter;
+use App\Services\GoogleSheetsInventoryItemService;
+use Livewire\Attributes\On;
 
+new class extends Component {
 
-    /*
-    |--------------------------------------------------------------------------
-    | Neues Item
-    |--------------------------------------------------------------------------
-    */
+    /** @var Collection<int, SourcedInventoryItem> */
+    public Collection $sourcedInventoryItems;
 
-    public function create(): void
+    public string $errorMessage = '';
+    public bool $isLoading = false;
+
+    public string $searchInput = '';
+
+    public array $checkboxFilters = [
+        'nonEmpty' => true,
+        'hasKleinanzeigen' => false,
+        'hasGpu' => false,
+        'hasRetailPrice' => false,
+    ];
+
+    public array $selectedItemsKeys = [];
+
+    #[Computed]
+    public function selectedItems(): Collection
     {
-        $this->editingId = null;
-        $this->showForm = true;
+        $selectedKeys = collect($this->selectedItemsKeys)->filter()->keys()->map(fn($key) => (int) $key);
+
+        return $this->großhandelItems->only($selectedKeys);
     }
 
-
-    /*
-    |--------------------------------------------------------------------------
-    | Item bearbeiten
-    |--------------------------------------------------------------------------
-    */
-
-    public function edit(string $id): void
+    public function toggleSelectItem(int $itemKey): void
     {
-        $this->editingId = $id;
-        $this->showForm = true;
+        if (isset($this->selectedItemsKeys[$itemKey])) {
+            unset($this->selectedItemsKeys[$itemKey]);
+        } else {
+            $this->selectedItemsKeys[$itemKey] = true;
+        }
     }
 
-
-    /*
-    |--------------------------------------------------------------------------
-    | Item löschen
-    |--------------------------------------------------------------------------
-    */
-
-    public function delete(string $id): void
+    public function deselectAll(): void
     {
-        InventoryItem::findOrFail($id)->delete();
+        $this->selectedItemsKeys = [];
     }
 
-
-    /*
-    |--------------------------------------------------------------------------
-    | Formular wurde gespeichert
-    |--------------------------------------------------------------------------
-    */
-
-    #[On('inventory-item-saved')]
-    public function itemSaved(): void
+    public function mount(GoogleSheetsInventoryItemService $inventoryService): void
     {
-        $this->showForm = false;
-        $this->editingId = null;
+        $tabs = $inventoryService->getItems('wholesale');
+        $this->sourcedInventoryItems = collect($tabs)
+            ->flatMap(fn (Collection $items, string $source) =>
+                $items->map(fn (InventoryItem $item) =>
+                    new SourcedInventoryItem($source, $item)
+                )
+            )
+            ->values();
     }
 
-
-    /*
-    |--------------------------------------------------------------------------
-    | Formular schließen
-    |--------------------------------------------------------------------------
-    */
-
-    public function closeForm(): void
+    #[Computed]
+    public function filterValues(): array
     {
-        $this->showForm = false;
-        $this->editingId = null;
+        $parsed = app(SearchQueryParser::class)->parse($this->searchInput);
+        return array_merge($this->checkboxFilters, $parsed);
     }
 
-
-    public function render()
+    #[Computed]
+    public function filteredItems(): Collection
     {
-        return $this->view([
-            'items' => InventoryItem::latest()->get(),
-        ]);
+        /** @var list<ItemListFilter<GrosshandelItem>> $filters */
+        //$filters = [app(EmptyFilter::class), app(RamFilter::class), app(SsdFilter::class), app(PriceFilter::class), app(HasRetailPriceFilter::class), app(HasKleinanzeigenFilter::class), app(HasGpuFilter::class), app(GpuFilter::class), app(LayoutFilter::class), app(SpecialsFilter::class), app(CpuFilter::class), app(DisplayNameFilter::class), app(ShelfFilter::class)];
+        $filters = [];
+        $items = $this->sourcedInventoryItems;
+
+        foreach ($filters as $filter) {
+            if ($filter->isActive($this->filterValues)) {
+                $items = $filter->apply($items, $this->filterValues);
+            }
+        }
+        return $items;
+    }
+
+    #[Computed]
+    public function groupedItems(): Collection
+    {
+        $items = $this->filteredItems();
+
+        // Ursprüngliche Position jedes Artikels festhalten.
+        // Dadurch erkennen wir auch dann Lücken, wenn Einträge herausgefiltert wurden.
+        $originalPositions = $this->sourcedInventoryItems
+            ->values()
+            ->mapWithKeys(fn($item, $position) => [
+                spl_object_id($item) => $position,
+            ]);
+
+        $groups = [];
+        $currentGroup = null;
+
+        $previousItem = null;
+        $previousPosition = null;
+
+        foreach ($items as $key => $item) {
+            $position = $originalPositions[spl_object_id($item)] ?? null;
+
+            $canJoin = $currentGroup !== null
+                && $previousItem !== null
+                && $position !== null
+                && $previousPosition !== null
+                && $position === $previousPosition + 1
+                && $this->sameProduct($currentGroup->first(), $item)
+                && $this->areAdjacentShelves(
+                    $previousItem->shelf,
+                    $item->shelf
+                );
+
+            if ($canJoin) {
+                // Artikel zur bestehenden Gruppe hinzufügen.
+                $currentGroup->put($key, $item);
+            } else {
+                // Vorherige Gruppe abschließen.
+                if ($currentGroup !== null) {
+                    $groups[] = $currentGroup;
+                }
+
+                // Jeder Artikel startet zunächst eine eigene Gruppe.
+                $currentGroup = collect([$key => $item]);
+            }
+
+            $previousItem = $item;
+            $previousPosition = $position;
+        }
+
+        // Letzte Gruppe ebenfalls übernehmen.
+        if ($currentGroup !== null) {
+            $groups[] = $currentGroup;
+        }
+
+        // Die internen Gruppen für die Darstellung aufbereiten.
+        return collect($groups)
+            ->map(function (Collection $groupItems) {
+                $firstItem = $groupItems->first();
+
+                return [
+                    'items' => $groupItems,
+                    'item' => $firstItem,
+                    'shelves' => $groupItems
+                        ->pluck('shelf')
+                        ->filter(fn($shelf) => $shelf !== null && $shelf !== '')
+                        ->values(),
+
+                    // Nur der erste Eintrag enthält eine gültige Menge.
+                    'amount' => $firstItem->amount,
+
+                    'grouped' => $groupItems->count() > 1,
+                ];
+            })
+            ->values();
+    }
+
+    /**
+     * Hersteller und Modell müssen übereinstimmen.
+     */
+
+    private function sameProduct(
+        InventoryItemLike $reference,
+        InventoryItemLike $candidate
+    ): bool {
+
+        $reference = $reference->getItem();
+        $candidate = $candidate->getItem();
+
+        // Hersteller und Modell müssen vorhanden und identisch sein.
+        foreach (['brand', 'model'] as $field) {
+            $a = strtolower(trim((string) $reference->$field));
+            $b = strtolower(trim((string) $candidate->$field));
+
+            if ($a === '' || $b === '' || $a !== $b) {
+                return false;
+            }
+        }
+
+        // Weitere Eigenschaften nur vergleichen, wenn der Folgeeintrag
+        // tatsächlich einen Wert enthält.
+        $fields = [
+            'cpu',
+            'ram',
+            'vram',
+            'storage',
+            'gpu',
+            'specials',
+            'keyboardLayout',
+            'condition',
+        ];
+
+        foreach ($fields as $field) {
+            $value = $candidate->$field;
+
+            if ($value === null || $value === '') {
+                continue;
+            }
+
+            $referenceValue = $reference->$field;
+
+            if (is_string($value) && is_string($referenceValue)) {
+                $value = strtolower(trim($value));
+                $referenceValue = strtolower(trim($referenceValue));
+            }
+
+            if ($value !== $referenceValue) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Prüft, ob zwei Fachnummern unmittelbar aufeinanderfolgen.
+     *
+     * Unterstützt beispielsweise:
+     * 519A -> 519B
+     * 519  -> 520
+     * A12  -> A13
+     * 12B  -> 12C
+     */
+    private function areAdjacentShelves(?string $a, ?string $b): bool
+    {
+        if (!$a || !$b) {
+            return false;
+        }
+
+        $pattern = '/^([a-z]*)(\d+)([a-z]?)$/i';
+
+        if (!preg_match($pattern, $a, $matchA) || !preg_match($pattern, $b, $matchB)) {
+            return false;
+        }
+
+        $prefixA = strtolower($matchA[1]);
+        $prefixB = strtolower($matchB[1]);
+
+        $numberA = (int) $matchA[2];
+        $numberB = (int) $matchB[2];
+
+        $suffixA = strtolower($matchA[3]);
+        $suffixB = strtolower($matchB[3]);
+
+        // Gleicher Fachbereich, nächste Nummer.
+        if ($prefixA === $prefixB && $suffixA === $suffixB && $numberB === $numberA + 1) {
+            return true;
+        }
+
+        // Gleiches Basisfach, nächster Buchstabe.
+        if ($prefixA === $prefixB && $numberA === $numberB && $suffixA !== '' && $suffixB !== '' && strlen($suffixA) === 1 && strlen($suffixB) === 1 && ord($suffixB) === ord($suffixA) + 1) {
+            return true;
+        }
+
+        return false;
+    }
+
+    public function toggleSelectGroup(array $itemKeys): void
+    {
+        $allSelected = collect($itemKeys)->every(fn($key) => isset($this->selectedItemsKeys[$key]));
+
+        foreach ($itemKeys as $key) {
+            if ($allSelected) {
+                unset($this->selectedItemsKeys[$key]);
+            } else {
+                $this->selectedItemsKeys[$key] = true;
+            }
+        }
+    }
+
+    #[Computed]
+    public function itemCount(): int
+    {
+        return $this->filteredItems()->count();
+    }
+
+    /*
+     * SignGallery
+     */
+
+    public bool $showSignGallery = false;
+
+    public function openSignGallery(): void
+    {
+        if ($this->selectedItems()->isNotEmpty()) {
+            $this->showSignGallery = true;
+        }
+    }
+
+    #[Computed]
+    public function signData(): array
+    {
+        return $this->selectedItems()
+            ->map(
+                fn(InventoryItem $item, int $key) => [
+                    'id' => $key,
+                    'manufacturer' => $item->brand ?? '',
+                    'device' => $item->displayName(),
+                    'title' => 'Ausstattung wie folgt',
+                    'lines' => collect([$item->cpu, $item->ram ? "{$item->ram} GB Ram" : null, $item->storage ? "{$item->storage} GB SSD" : null, $item->gpu, $item->specials])
+                        ->filter()
+                        ->implode("\n"),
+                    'prefix' => 'nur',
+                    'price' => $item->retailPrice ? "{$item->retailPrice}€" : '',
+                ],
+            )
+            ->values()
+            ->all();
+    }
+
+    #[On('sign-gallery-empty')]
+    public function closeSignGallery(): void
+    {
+        $this->showSignGallery = false;
     }
 };
 ?>
 
-<div class="space-y-6 p-6">
+<div class="min-h-screen bg-gray-100 flex items-center justify-center p-6">
 
-    {{-- Header --}}
-    <div class="flex items-center justify-between">
+    {{-- Container --}}
+    <div class="max-w-5xl w-full bg-white shadow-lg rounded-xl p-6">
 
+        <!-- Error -->
+        @if ($errorMessage)
+        <div class="text-2xl text-red-500">{{ $errorMessage }}</div>
+        @endif
+
+        {{--
+        <pre>
+            {{ var_dump($this->filterValues) }}
+        </pre>
+        --}}
+
+        {{-- Header --}}
         <div>
-            <h1 class="text-2xl font-bold">
-                Inventar
-            </h1>
-
-            <p class="text-sm text-gray-500">
-                {{ $items->count() }} Geräte
+            <h1 class="text-3xl font-bold text-gray-900 mb-2">Großhandel</h1>
+            <p class="text-gray-700 mb-4">
+                Total items: {{ $this->sourcedInventoryItems->count() }} |
+                Filtered items: {{ $this->itemCount }}
             </p>
         </div>
 
+        {{-- Search input and some simple filters --}}
+        <div class="mb-6">
 
-        <button
-            type="button"
-            wire:click="create"
-            class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-        >
-            + Gerät hinzufügen
-        </button>
+            <input type="text" placeholder="Search..." wire:model.live.debounce.300ms="searchInput"
+                class="w-full border border-gray-300 rounded-lg py-2 px-4 focus:outline-none focus:ring-2 focus:ring-blue-500">
 
-    </div>
+            <div class="w-full flex gap-2 flex-wrap mt-2 ml-2 text-sm text-gray-700">
 
+                <label>
+                    <input type="checkbox" wire:model.live="checkboxFilters.nonEmpty" />
+                    Show only non-empty
+                </label>
 
-    {{-- Tabelle --}}
-    <div class="overflow-hidden rounded-xl border border-gray-200 bg-white">
+                <label>
+                    <input type="checkbox" wire:model.live="checkboxFilters.hasKleinanzeigen">
+                    Show only items listed on Kleinanzeigen
+                </label>
 
-        <table class="w-full text-left text-sm">
+                <label>
+                    <input type="checkbox" wire:model.live="checkboxFilters.hasGpu">
+                    Show only items with GPU
+                </label>
 
-            <thead class="border-b bg-gray-50">
+                <label>
+                    <input type="checkbox" wire:model.live="checkboxFilters.hasRetailPrice">
+                    Show only items with retail price
+                </label>
 
-                <tr>
+            </div>
+        </div>
 
-                    <th class="px-4 py-3">
-                        Regal
-                    </th>
+        {{-- Items --}}
+        <div class="divide-y-2 divide-gray-300">
+            @foreach ($this->groupedItems as $group)
+            @php
+            $item = $group['item'];
+            $groupKeys = $group['items']->keys()->all();
 
-                    <th class="px-4 py-3">
-                        Gerät
-                    </th>
+            $isSelected = collect($groupKeys)->every(fn($key) => isset($selectedItemsKeys[$key]));
+            @endphp
 
-                    <th class="px-4 py-3">
-                        CPU
-                    </th>
+            <div wire:key="item-group-{{ implode('-', $groupKeys) }}"
+                wire:click="toggleSelectGroup(@js($groupKeys))" @class([ 'group px-4 py-3 transition-colors duration-200' , 'bg-amber-200 hover:bg-amber-300'=> $isSelected,
+                'odd:bg-gray-100 even:bg-gray-200 hover:bg-amber-100' => !$isSelected,
+                ])>
 
-                    <th class="px-4 py-3">
-                        RAM
-                    </th>
+                <div class="flex items-center gap-4">
 
-                    <th class="px-4 py-3">
-                        SSD
-                    </th>
+                    {{-- Shelves --}}
+                    @if ($group['shelves']->isNotEmpty())
+                    <div class="shrink-0 flex flex-col items-start gap-1">
+                        @foreach ($group['shelves'] as $shelf)
+                        <span
+                            class="min-w-16 rounded-md bg-indigo-600 px-2 py-1
+                         text-center text-xs font-bold text-white shadow-sm">
+                            {{ $shelf }}
+                        </span>
+                        @endforeach
+                    </div>
+                    @endif
 
-                    <th class="px-4 py-3">
-                        Menge
-                    </th>
+                    {{-- Item --}}
+                    <div class="min-w-0 flex-1">
 
-                    <th class="px-4 py-3">
-                        Preis
-                    </th>
+                        <div class="flex items-center gap-2">
 
-                    <th class="px-4 py-3">
-                    </th>
+                            {{-- Display Name --}}
+                            <span class="truncate font-bold text-gray-900">
+                                {{ $item->displayName() }}
+                            </span>
 
-                </tr>
-
-            </thead>
-
-
-            <tbody class="divide-y divide-gray-100">
-
-                @forelse($items as $item)
-
-                    <tr class="hover:bg-gray-50">
-
-                        <td class="px-4 py-3">
-                            {{ $item->shelf ?: '—' }}
-                        </td>
-
-
-                        <td class="px-4 py-3">
-
-                            <div class="font-medium">
-                                {{ $item->manufacturer }}
-                                {{ $item->model }}
-                            </div>
-
-                            @if($item->condition)
-
-                                <div class="text-xs text-gray-500">
-                                    {{ $item->condition }}
-                                </div>
-
+                            {{-- Amount --}}
+                            @if ($group['amount'] !== null)
+                            <span
+                                class="shrink-0 rounded-md bg-gray-600 px-2 py-1
+                 text-xs font-bold text-white shadow-sm">
+                                x{{ $group['amount'] }}
+                            </span>
                             @endif
 
-                        </td>
-
-
-                        <td class="px-4 py-3">
-                            {{ $item->cpu ?: '—' }}
-                        </td>
-
-
-                        <td class="px-4 py-3">
-                            {{ $item->ram ? $item->ram . ' GB' : '—' }}
-                        </td>
-
-
-                        <td class="px-4 py-3">
-                            {{ $item->ssd ? $item->ssd . ' GB' : '—' }}
-                        </td>
-
-
-                        <td class="px-4 py-3">
-                            {{ $item->amount ?? '—' }}
-                        </td>
-
-
-                        <td class="px-4 py-3">
-
-                            @if($item->price !== null)
-
-                                {{ number_format($item->price / 100, 2, ',', '.') }} €
-
-                            @else
-
-                                —
-
+                            @if ($group['grouped'])
+                            <span
+                                class="shrink-0 rounded-md bg-indigo-100 px-2 py-1
+                 text-xs font-bold text-indigo-800">
+                                {{ $group['items']->count() }} Fächer
+                            </span>
                             @endif
 
-                        </td>
-
-
-                        <td class="px-4 py-3">
-
-                            <div class="flex justify-end gap-2">
-
-                                <button
-                                    type="button"
-                                    wire:click="edit('{{ $item->id }}')"
-                                    class="rounded-lg px-3 py-1.5 text-sm hover:bg-gray-100"
-                                >
-                                    Bearbeiten
-                                </button>
-
-
-                                <button
-                                    type="button"
-                                    wire:click="delete('{{ $item->id }}')"
-                                    wire:confirm="Möchtest du dieses Gerät wirklich löschen?"
-                                    class="rounded-lg px-3 py-1.5 text-sm text-red-600 hover:bg-red-50"
-                                >
-                                    Löschen
-                                </button>
-
-                            </div>
-
-                        </td>
-
-                    </tr>
-
-                @empty
-
-                    <tr>
-
-                        <td
-                            colspan="8"
-                            class="px-4 py-12 text-center text-gray-500"
-                        >
-                            Noch keine Geräte im Inventar.
-                        </td>
-
-                    </tr>
-
-                @endforelse
-
-            </tbody>
-
-        </table>
-
-    </div>
-
-
-    {{-- Modal --}}
-    @if($showForm)
-
-        @teleport('body')
-
-            <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
-
-                {{-- Overlay --}}
-                <div
-                    class="absolute inset-0 bg-black/50"
-                    wire:click="closeForm"
-                ></div>
-
-
-                {{-- Dialog --}}
-                <div
-                    class="relative w-full max-w-2xl rounded-xl bg-white shadow-xl"
-                >
-
-                    {{-- Header --}}
-                    <div class="flex items-center justify-between border-b px-6 py-4">
-
-                        <div>
-
-                            <h2 class="text-lg font-semibold">
-                                {{ $editingId
-                                    ? 'Gerät bearbeiten'
-                                    : 'Gerät hinzufügen'
-                                }}
-                            </h2>
-
-                            <p class="text-sm text-gray-500">
-                                {{ $editingId
-                                    ? 'Daten des Geräts bearbeiten.'
-                                    : 'Ein neues Gerät zum Inventar hinzufügen.'
-                                }}
-                            </p>
+                            {{-- Comment --}}
+                            @if ($item->comment)
+                            @foreach (explode(',', $item->comment) as $comment)
+                            <span
+                                class="rounded-md border-l-4 border-amber-500 bg-white px-3 py-1 text-xs font-bold text-gray-800 shadow-sm ">
+                                {{ $comment }}
+                            </span>
+                            @endforeach
+                            @endif
 
                         </div>
 
+                        {{-- Specs --}}
+                        <div class="mt-1 flex flex-wrap gap-1.5 text-xs">
 
-                        <button
-                            type="button"
-                            wire:click="closeForm"
-                            class="rounded-lg p-2 text-gray-400 hover:bg-gray-100"
-                        >
-                            ✕
-                        </button>
+                            @if ($item->cpu)
+                            <span class="rounded bg-blue-600 px-2 py-1 font-medium text-white">
+                                {{ $item->cpu }}
+                            </span>
+                            @endif
 
+                            @if ($item->ram)
+                            <span class="rounded bg-emerald-600 px-2 py-1 font-medium text-white">
+                                {{ $item->ram }} GB RAM
+                            </span>
+                            @endif
+
+                            @if ($item->ssd)
+                            <span class="rounded bg-violet-600 px-2 py-1 font-medium text-white">
+                                {{ $item->ssd }} GB SSD
+                            </span>
+                            @endif
+
+                            @if ($item->gpu)
+                            <span class="rounded bg-red-600 px-2 py-1 font-medium text-white">
+                                {{ $item->gpu }}
+                            </span>
+                            @endif
+
+                            @if ($item->specials)
+                            @foreach (explode(',', $item->specials) as $special)
+                            <span class="rounded bg-pink-600 px-2 py-1 font-medium text-white">
+                                {{ $special }}
+                            </span>
+                            @endforeach
+                            @endif
+
+                            @if ($item->layout)
+                            <span class="rounded bg-cyan-600 px-2 py-1 font-medium text-white">
+                                {{ $item->layout }}
+                            </span>
+                            @endif
+
+                            @if ($item->condition)
+                            @foreach (explode(',', $item->condition) as $condition)
+                            <span class="rounded bg-gray-600 px-2 py-1 font-medium text-white">
+                                {{ $condition }}
+                            </span>
+                            @endforeach
+                            @endif
+
+                            @if ($item->kleinanzeigenId)
+                            {{-- Kleinanzeigen ID --}}
+                            <a href="https://www.kleinanzeigen.de/s-anzeige/{{ $item->kleinanzeigenId }}"
+                                wire:click.stop target="_blank" rel="noopener noreferrer"
+                                class="shrink-0 rounded-md bg-yellow-600 px-2 py-1
+                                        text-xs font-bold text-white shadow-sm
+                                        transition hover:bg-yellow-700"
+                                title="Kleinanzeigen-Anzeige öffnen">
+                                {{ $item->kleinanzeigenId }}
+                                @if ($item->kleinanzeigenPrice)
+                                | {{ $item->kleinanzeigenPrice }}€
+                                @endif
+                            </a>
+                            @endif
+
+                            @if ($item->kleinanzeigenPrice && !$item->kleinanzeigenId)
+                            <span
+                                class="shrink-0 rounded-md bg-yellow-600 px-2 py-1
+                                       text-xs font-bold text-white shadow-sm
+                                       transition hover:bg-yellow-700">
+                                {{ $item->kleinanzeigenPrice }}€
+                            </span>
+                            @endif
+
+                        </div>
                     </div>
 
 
-                    {{-- Formular --}}
-                    <livewire:forms.inventory-item-create-edit-form
-                        :item-id="$editingId"
-                        :key="'inventory-item-form-' . ($editingId ?? 'new')"
-                    />
-
                 </div>
+            </div>
+            @endforeach
+        </div>
 
+        {{-- Floating action menu --}}
+        @if ($this->selectedItems->isNotEmpty())
+        <div x-data="{ open: false }" x-on:keydown.escape.window="open = false"
+            class="fixed bottom-6 right-6 z-50 w-72">
+            {{-- Expandable actions --}}
+            <div x-cloak x-show="open" x-transition:enter="transition ease-out duration-250"
+                x-transition:enter-start="opacity-0 translate-y-4 scale-95"
+                x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+                x-transition:leave="transition ease-in duration-200"
+                x-transition:leave-start="opacity-100 translate-y-0 scale-100"
+                x-transition:leave-end="opacity-0 translate-y-4 scale-95"
+                class="mb-3 overflow-hidden rounded-xl border
+                   border-gray-700 bg-gray-900 p-2
+                   text-white shadow-2xl">
+                @php
+                $actions = [
+                ['icon' => '🏷️', 'label' => 'Label erstellen'],
+                ['icon' => '🖨️', 'label' => 'A6-Schilder erstellen', 'action' => 'openSignGallery'],
+                ['icon' => '📋', 'label' => 'Kleinanzeigen-Liste'],
+                ['icon' => '📊', 'label' => 'Excel-Export'],
+                ];
+                @endphp
+
+                @foreach ($actions as $action)
+                <button type="button" wire:key="selection-action-{{ $loop->index }}"
+                    @isset($action['action']) wire:click="{{ $action['action'] }}" @endisset
+                    x-on:click="open = false"
+                    class="flex w-full items-center gap-3
+                           rounded-lg px-3 py-3 text-left
+                           transition hover:bg-gray-700
+                           focus:outline-none focus:ring-2
+                           focus:ring-blue-500">
+                    <span class="text-xl">{{ $action['icon'] }}</span>
+                    <span class="font-medium">{{ $action['label'] }}</span>
+                    <span class="ml-auto text-gray-500">›</span>
+                </button>
+                @endforeach
             </div>
 
-        @endteleport
+            {{-- Main toggle button --}}
+            <button type="button" x-on:click="open = !open"
+                class="flex w-full items-center gap-3
+                   rounded-xl bg-blue-600 px-4 py-3
+                   text-left text-white shadow-xl
+                   transition hover:bg-blue-700
+                   focus:outline-none focus:ring-2
+                   focus:ring-blue-400 focus:ring-offset-2"
+                :aria-expanded="open">
+                <span
+                    class="flex h-10 w-10 items-center
+                         justify-center rounded-lg bg-blue-500">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 transition-transform duration-200"
+                        :class="{ 'rotate-180': open }" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                        stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                </span>
 
-    @endif
+                <span class="flex-1">
+                    <span class="block font-semibold">
+                        {{ $this->selectedItems->count() }}
+                        Artikel ausgewählt
+                    </span>
+                    <span class="block text-xs text-blue-100">
+                        Aktionen {{ 'anzeigen' }}
+                    </span>
+                </span>
+            </button>
+
+            {{-- Deselect all --}}
+            <button type="button" wire:click="deselectAll" x-on:click="open = false"
+                class="mt-2 w-full rounded-lg border
+                   border-gray-300 bg-white px-3 py-2
+                   text-sm text-gray-600 shadow-sm
+                   transition hover:bg-gray-100">
+                Auswahl aufheben
+            </button>
+        </div>
+        @endif
+
+        @if ($showSignGallery)
+        <livewire:sign-gallery :signs="$this->signData" />
+        @endif
+
+        {{--
+        public readonly ?int $shelf,
+        public readonly ?string $manufacturer,
+        public readonly ?string $model,
+        public readonly ?string $cpu,
+        public readonly ?int $ram,
+        public readonly ?int $ssd,
+        public readonly ?string $gpu,
+        public readonly ?int $amount,
+        public readonly ?string $condition,
+        public readonly ?string $specials,
+        public readonly ?string $layout,
+        public readonly ?int $price,
+        public readonly ?string $comment,
+        public readonly ?int $kleinanzeigenPrice,
+        public readonly ?string $kleinanzeigenId,
+        --}}
+
+
+    </div>
+
+
 
 </div>

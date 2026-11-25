@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Concerns\Concerns;
+namespace App\Concerns;
 
 /** 
  * Trait for making arrays wireable in Livewire.
@@ -11,16 +11,24 @@ namespace App\Concerns\Concerns;
 trait WireableArray
 {
     /**
-     * Convert the object to an array for Livewire.
+     * Create an object from an array.
+     * @param array<string, mixed> $data
+     * @return static the created object
      */
+    abstract public static function fromArray(array $data): static;
+
+    /**
+     * Export the object to an array.
+     * @return array<string, mixed>
+     */
+    abstract public function toArray(): array;  
+
+
     public function toLivewire(): array
     {
         return $this->toArray();
     }
 
-    /**
-     * Create an object from an array for Livewire.
-     */
     public static function fromLivewire(mixed $value): static
     {
         return static::fromArray($value);

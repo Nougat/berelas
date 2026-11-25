@@ -2,7 +2,7 @@
 
 namespace App\Data;
 
-use App\Concerns\Concerns\WireableArray;
+use App\Concerns\WireableArray;
 use Livewire\Wireable;
 
 class InventoryItem implements Wireable
@@ -40,30 +40,36 @@ class InventoryItem implements Wireable
     */
 
     /**
-     * Create object from array.
-     * @param array<string, mixed> $data
-     * @return static the object 
+     * Create an InventoryItem instance from an array of data.
+     * @param array $data The data for the inventory item.
+     * @return static The created InventoryItem instance.
      */
     public static function fromArray(array $data): static
     {
-        return new static(
-            location: self::string($data['location'] ?? null),
-            brand: self::string($data['brand'] ?? null),
-            model: self::string($data['model'] ?? null),
-            cpu: self::string($data['cpu'] ?? null),
-            ram: self::int($data['ram'] ?? null),
-            vram: self::int($data['vram'] ?? null),
-            storage: self::int($data['storage'] ?? null),
-            gpu: self::string($data['gpu'] ?? null),
-            quantity: self::int($data['quantity'] ?? null),
-            condition: self::string($data['condition'] ?? null),
-            specials: self::string($data['specials'] ?? null),
-            keyboardLayout: self::string($data['keyboardLayout'] ?? null),
-            comment: self::string($data['comment'] ?? null),
-            wholesalePrice: self::int($data['wholesalePrice'] ?? null),
-            retailPrice: self::int($data['retailPrice'] ?? null),
-            kleinanzeigenId: self::string($data['kleinanzeigenId'] ?? null)
-        );
+        return new static(...static::itemDataFromArray($data));
+    }
+
+
+    protected static function itemDataFromArray(array $data): array
+    {
+        return [
+            'location' => self::string($data['location'] ?? null),
+            'brand' => self::string($data['brand'] ?? null),
+            'model' => self::string($data['model'] ?? null),
+            'cpu' => self::string($data['cpu'] ?? null),
+            'ram' => self::int($data['ram'] ?? null),
+            'vram' => self::int($data['vram'] ?? null),
+            'storage' => self::int($data['storage'] ?? null),
+            'gpu' => self::string($data['gpu'] ?? null),
+            'quantity' => self::int($data['quantity'] ?? null),
+            'condition' => self::string($data['condition'] ?? null),
+            'specials' => self::string($data['specials'] ?? null),
+            'keyboardLayout' => self::string($data['keyboardLayout'] ?? null),
+            'comment' => self::string($data['comment'] ?? null),
+            'wholesalePrice' => self::int($data['wholesalePrice'] ?? null),
+            'retailPrice' => self::int($data['retailPrice'] ?? null),
+            'kleinanzeigenId' => self::string($data['kleinanzeigenId'] ?? null)
+        ];
     }
 
     /** 

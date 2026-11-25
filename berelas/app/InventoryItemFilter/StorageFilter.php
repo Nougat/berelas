@@ -1,16 +1,15 @@
 <?php
 
-namespace App\ItemListFilter\GrosshandelItem;
+namespace App\InventoryItemFilter;
 
-use App\Data\GrosshandelItem;
-use App\ItemListFilter\ItemListFilter;
+use App\Data\InventoryItem;
 use Illuminate\Support\Collection;
 
 /**
  * Filter for SSD sizes. Filters items based on the specified minimum and maximum SSD values.
- * @implements ItemListFilter<GrosshandelItem>
+ * @implements InventoryItemFilter<InventoryItem>
  */
-class SsdFilter implements ItemListFilter
+class StorageFilter implements InventoryItemFilter
 {
 
     /**
@@ -20,31 +19,31 @@ class SsdFilter implements ItemListFilter
      */
     public function isActive(array $filterValues): bool
     {
-        return $filterValues['ssdMin'] !== null || $filterValues['ssdMax'] !== null;
+        return filled($filterValues['storageMin'] ?? null) || filled($filterValues['storageMax'] ?? null);
     }
 
     /**
      * Apply the filter to the collection of items.
-     * @param Collection<GrosshandelItem> $items
+     * @param Collection<InventoryItem> $items
      * @param array $filterValues
-     * @return Collection<GrosshandelItem> Filtered collection of items based on SSD size.
+     * @return Collection<InventoryItem> Filtered collection of items based on storage size.
      */
     public function apply(Collection $items, array $filterValues): Collection
     {
-        return $items->filter(function (GrosshandelItem $item) use ($filterValues) {
+        return $items->filter(function (InventoryItem $item) use ($filterValues) {
             
-            $ssdMin = $filterValues['ssdMin'];
-            $ssdMax = $filterValues['ssdMax'];
+            $storageMin = $filterValues['storageMin'];
+            $storageMax = $filterValues['storageMax'];
 
-            if ($item->ssd === null) {
+            if ($item->storage === null) {
                 return false;
             }
 
-            if ($ssdMin !== null && $item->ssd < $ssdMin) {
+            if ($storageMin !== null && $item->storage < $storageMin) {
                 return false;
             }
 
-            if ($ssdMax !== null && $item->ssd > $ssdMax) {
+            if ($storageMax !== null && $item->storage > $storageMax) {
                 return false;
             }
 

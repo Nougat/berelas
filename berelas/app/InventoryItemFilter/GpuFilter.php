@@ -1,16 +1,15 @@
 <?php
 
-namespace App\ItemListFilter\GrosshandelItem;
+namespace App\InventoryItemFilter;
 
-use App\Data\GrosshandelItem;
-use App\ItemListFilter\ItemListFilter;
+use App\Data\InventoryItem;
 use Illuminate\Support\Collection;
 
 /**
  * Filter for items that have a specific GPU.
- * @implements ItemListFilter<GrosshandelItem>
+ * @implements InventoryItemFilter<InventoryItem>
  */
-class GpuFilter implements ItemListFilter
+class GpuFilter implements InventoryItemFilter
 {
     /**
      * Determine if the filter is active based on the provided filter values.
@@ -24,15 +23,15 @@ class GpuFilter implements ItemListFilter
 
     /**
      * Apply the filter to the collection of items.
-     * @param Collection<int, GrosshandelItem> $items
+     * @param Collection<int, InventoryItem> $items
      * @param array<string, mixed> $filterValues
-     * @return Collection<int, GrosshandelItem> Filtered collection of items based on GPU presence.
+     * @return Collection<int, InventoryItem> Filtered collection of items based on GPU presence.
      */
     public function apply(Collection $items, array $filterValues): Collection
     {
         $gpuFilterValue = strtolower($filterValues['gpu']);
 
-        return $items->filter(function (GrosshandelItem $item) use ($gpuFilterValue) {
+        return $items->filter(function (InventoryItem $item) use ($gpuFilterValue) {
             return isset($item->gpu) && str_contains(strtolower($item->gpu), $gpuFilterValue);
         });
     }

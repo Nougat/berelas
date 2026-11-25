@@ -37,6 +37,9 @@ class SourcedInventoryItem extends InventoryItem
      */
     public static function fromArray(array $data): static
     {
-        return static::from(parent::fromArray($data), self::string($data['source'] ?? ''));
+        return new static(
+            self::string($data['source'] ?? null) ?? '',
+            ...static::itemDataFromArray($data)
+        );
     }
 }

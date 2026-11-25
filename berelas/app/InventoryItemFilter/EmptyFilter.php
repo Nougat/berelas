@@ -1,16 +1,15 @@
 <?php
 
-namespace App\ItemListFilter\GrosshandelItem;
+namespace App\InventoryItemFilter;
 
-use App\Data\GrosshandelItem;
-use App\ItemListFilter\ItemListFilter;
+use App\Data\InventoryItem;
 use Illuminate\Support\Collection;
 
 /**
  * Filter for empty items. Remove empty items from the list.
- * @implements ItemListFilter<GrosshandelItem>
+ * @implements InventoryItemFilter<InventoryItem>
  */
-class EmptyFilter implements ItemListFilter
+class EmptyFilter implements InventoryItemFilter
 {
     /**
      * Determine if the filter is active based on the provided filter values.
@@ -24,14 +23,14 @@ class EmptyFilter implements ItemListFilter
 
     /**
      * Apply the filter to the given collection of items.
-     * @param Collection<int, GrosshandelItem> $items
+     * @param Collection<int, InventoryItem> $items
      * @param array<string, mixed> $filterValues
-     * @return Collection<int, GrosshandelItem>
+     * @return Collection<int, InventoryItem>
      */
     public function apply(Collection $items, array $filterValues) : Collection
     {
         return $items
-            ->filter(function (GrosshandelItem $item) {
+            ->filter(function (InventoryItem $item) {
                 return $item->model !== null && $item->model !== '';
             });
     }

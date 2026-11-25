@@ -1,16 +1,15 @@
 <?php
 
-namespace App\ItemListFilter\GrosshandelItem;
+namespace App\InventoryItemFilter;
 
-use App\Data\GrosshandelItem;
-use App\ItemListFilter\ItemListFilter;
+use App\Data\InventoryItem;
 use Illuminate\Support\Collection;
 
 /**
  * Filters items based on their shelf location.
- * @implements ItemListFilter<GrosshandelItem>
+ * @implements InventoryItemFilter<InventoryItem>
  */
-class ShelfFilter implements ItemListFilter
+class LocationFilter implements InventoryItemFilter
 {
     /**
      * Determine if the filter is active based on the provided filter values.
@@ -19,14 +18,14 @@ class ShelfFilter implements ItemListFilter
      */
     public function isActive(array $filterValues): bool
     {
-        return $filterValues['shelfMin'] !== null || $filterValues['shelfMax'] !== null;
+        return filled($filterValues['shelfMin'] ?? null) || filled($filterValues['shelfMax'] ?? null);
     }
 
     /**
      * Apply the filter to the collection of items.
-     * @param Collection<GrosshandelItem> $items
+     * @param Collection<InventoryItem> $items
      * @param array<string, mixed> $filterValues
-     * @return Collection<GrosshandelItem> Filtered collection of items based on shelf location.
+     * @return Collection<InventoryItem> Filtered collection of items based on shelf location.
      */
     public function apply(Collection $items, array $filterValues): Collection
     {
@@ -37,9 +36,9 @@ class ShelfFilter implements ItemListFilter
             return $items; // No filtering needed if both min and max are null
         }
 
-        return $items->filter(function (GrosshandelItem $item) use ($shelfMin, $shelfMax) {
+        return $items->filter(function (InventoryItem $item) use ($shelfMin, $shelfMax) {
 
-            $shelf = $item->shelf;
+            $shelf = $item->location;
 
             if ($shelf === null || $shelf === '') {
                 return false; // Exclude items with null or empty shelf

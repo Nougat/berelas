@@ -1,6 +1,6 @@
 <?php
 
-namespace App\ItemListFilter;
+namespace App\InventoryItemFilter;
 
 class SearchQueryParser
 {

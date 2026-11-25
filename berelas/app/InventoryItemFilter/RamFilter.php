@@ -1,16 +1,15 @@
 <?php
 
-namespace App\ItemListFilter\GrosshandelItem;
+namespace App\InventoryItemFilter;
 
-use App\Data\GrosshandelItem;
-use App\ItemListFilter\ItemListFilter;
+use App\Data\InventoryItem;
 use Illuminate\Support\Collection;
 
 /**
  * Filter for RAM sizes. Filters items based on the specified minimum and maximum RAM values.
- * @implements ItemListFilter<GrosshandelItem>
+ * @implements InventoryItemFilter<InventoryItem>
  */
-class RamFilter implements ItemListFilter
+class RamFilter implements InventoryItemFilter
 {
 
     /**
@@ -20,18 +19,18 @@ class RamFilter implements ItemListFilter
      */
     public function isActive(array $filterValues): bool
     {
-        return $filterValues['ramMin'] !== null || $filterValues['ramMax'] !== null;
+        return filled($filterValues['ramMin'] ?? null) || filled($filterValues['ramMax'] ?? null);
     }
 
     /**
      * Apply the filter to the collection of items.
-     * @param Collection<GrosshandelItem> $items
+     * @param Collection<InventoryItem> $items
      * @param array $filterValues
-     * @return Collection<GrosshandelItem> Filtered collection of items based on RAM size.
+     * @return Collection<InventoryItem> Filtered collection of items based on RAM size.
      */
     public function apply(Collection $items, array $filterValues): Collection
     {
-        return $items->filter(function (GrosshandelItem $item) use ($filterValues) {
+        return $items->filter(function (InventoryItem $item) use ($filterValues) {
             
             $ramMin = $filterValues['ramMin'];
             $ramMax = $filterValues['ramMax'];

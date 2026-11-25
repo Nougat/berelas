@@ -1,30 +1,33 @@
 <?php
 
-use App\Data\InventoryItem;
-use App\Data\InventoryItemLike;
-use App\Data\SourcedInventoryItem;
 
-use App\ItemListFilter\GrosshandelItem\CpuFilter;
-use App\ItemListFilter\GrosshandelItem\DisplayNameFilter;
-use Illuminate\Support\Collection;
+
 use Livewire\Component;
+use Livewire\Attributes\On;
 use Livewire\Attributes\Computed;
 
-use App\ItemListFilter\ItemListFilter;
-use App\ItemListFilter\SearchQueryParser;
-use App\ItemListFilter\GrosshandelItem\EmptyFilter;
-use App\ItemListFilter\GrosshandelItem\GpuFilter;
-use App\ItemListFilter\GrosshandelItem\HasGpuFilter;
-use App\ItemListFilter\GrosshandelItem\HasKleinanzeigenFilter;
-use App\ItemListFilter\GrosshandelItem\HasRetailPriceFilter;
-use App\ItemListFilter\GrosshandelItem\LayoutFilter;
-use App\ItemListFilter\GrosshandelItem\PriceFilter;
-use App\ItemListFilter\GrosshandelItem\RamFilter;
-use App\ItemListFilter\GrosshandelItem\ShelfFilter;
-use App\ItemListFilter\GrosshandelItem\SpecialsFilter;
-use App\ItemListFilter\GrosshandelItem\SsdFilter;
+use Illuminate\Support\Collection;
+
 use App\Services\GoogleSheetsInventoryItemService;
-use Livewire\Attributes\On;
+
+use App\Data\InventoryItem;
+use App\Data\SourcedInventoryItem;
+
+use App\InventoryItemFilter\InventoryItemFilter;
+use App\InventoryItemFilter\SearchQueryParser;
+use App\InventoryItemFilter\CpuFilter;
+use App\InventoryItemFilter\DisplayNameFilter;
+use App\InventoryItemFilter\EmptyFilter;
+use App\InventoryItemFilter\GpuFilter;
+use App\InventoryItemFilter\HasGpuFilter;
+use App\InventoryItemFilter\HasKleinanzeigenFilter;
+use App\InventoryItemFilter\HasRetailPriceFilter;
+use App\InventoryItemFilter\KeyboardLayoutFilter;
+use App\InventoryItemFilter\RetailPriceFilter;
+use App\InventoryItemFilter\RamFilter;
+use App\InventoryItemFilter\LocationFilter;
+use App\InventoryItemFilter\SpecialsFilter;
+use App\InventoryItemFilter\StorageFilter;
 
 new class extends Component {
 
@@ -64,7 +67,6 @@ new class extends Component {
     public function selectedItems(): Collection
     {
         $selectedKeys = collect($this->selectedItemsKeys)->filter()->keys()->map(fn($key) => (int) $key);
-
         return $this->sourcedInventoryItems->only($selectedKeys);
     }
 
@@ -107,17 +109,16 @@ new class extends Component {
     #[Computed]
     public function filteredItems(): Collection
     {
-        /** @var list<ItemListFilter<GrosshandelItem>> $filters */
-        //$filters = [app(EmptyFilter::class), app(RamFilter::class), app(SsdFilter::class), app(PriceFilter::class), app(HasRetailPriceFilter::class), app(HasKleinanzeigenFilter::class), app(HasGpuFilter::class), app(GpuFilter::class), app(LayoutFilter::class), app(SpecialsFilter::class), app(CpuFilter::class), app(DisplayNameFilter::class), app(ShelfFilter::class)];
-        $filters  = [];
-        $items = $this->sourcedInventoryItems;
+        /** @var list<InventoryItemFilter> $filters */
+        $filters = [app(EmptyFilter::class), app(RamFilter::class), app(StorageFilter::class), app(RetailPriceFilter::class), app(HasRetailPriceFilter::class), app(HasKleinanzeigenFilter::class), app(HasGpuFilter::class), app(GpuFilter::class), app(KeyboardLayoutFilter::class), app(SpecialsFilter::class), app(CpuFilter::class), app(DisplayNameFilter::class), app(LocationFilter::class)];
+        $filteredItems = $this->sourcedInventoryItems;
 
         foreach ($filters as $filter) {
             if ($filter->isActive($this->filterValues)) {
-                $items = $filter->apply($items, $this->filterValues);
+                $filteredItems = $filter->apply($filteredItems, $this->filterValues);
             }
         }
-        return $items;
+        return $filteredItems;
     }
 
     /*

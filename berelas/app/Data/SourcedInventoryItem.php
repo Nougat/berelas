@@ -2,27 +2,41 @@
 
 namespace App\Data;
 
-class SourcedInventoryItem implements InventoryItemLike
+class SourcedInventoryItem extends InventoryItem
 {
 
     /**
      * Create a new SourcedInventoryItem instance.
      * @param string $source The source of the inventory item (e.g., 'wholesale', 'retail', etc.)
-     * @param InventoryItem $item The inventory item object containing the details of the item
+     * @param mixed ...$itemData The data for the inventory item (must be named arguments)
      */
     public function __construct(
-        public readonly string $source,
-        public readonly InventoryItem $item,
-    ) {}
+        public readonly string $source,        
+        mixed ...$itemData,
+    ) {
+        parent::__construct(...$itemData);
+    }
 
-    
     /**
-     * Get the underlying InventoryItem object. This method is part of the InventoryItemLike interface, 
-     * allowing for polymorphic behavior when dealing with different types of inventory items.
-     * @return InventoryItem The inventory item associated with this SourcedInventoryItem.
+     * Create a SourcedInventoryItem instance from an existing InventoryItem and a source.
+     * @param InventoryItem $item The inventory item to source.
+     * @param string $source The source of the inventory item.
+     * @return static The created SourcedInventoryItem instance.
      */
-    public function getItem(): InventoryItem
+    public static function from(InventoryItem $item, string $source): static
     {
-        return $this->item;
+        $data = $item->toArray();
+        unset($data['source']);
+        return new static($source, ...$data);
+    }
+
+    /**
+     * Create a SourcedInventoryItem instance from an array of data.
+     * @param array $data The data for the inventory item.
+     * @return static The created SourcedInventoryItem instance.
+     */
+    public static function fromArray(array $data): static
+    {
+        return static::from(parent::fromArray($data), self::string($data['source'] ?? ''));
     }
 }

@@ -28,20 +28,35 @@ use Livewire\Attributes\On;
 
 new class extends Component {
 
-    /** @var Collection<int, SourcedInventoryItem> */
-    public Collection $sourcedInventoryItems;
-
     public string $errorMessage = '';
     public bool $isLoading = false;
 
-    public string $searchInput = '';
+    /*
+    |------------------------------------------------------------------------
+    | Mounting and Preparation
+    |------------------------------------------------------------------------
+    */
 
-    public array $checkboxFilters = [
-        'nonEmpty' => true,
-        'hasKleinanzeigen' => false,
-        'hasGpu' => false,
-        'hasRetailPrice' => false,
-    ];
+    /** @var Collection<int, SourcedInventoryItem> */
+    public Collection $sourcedInventoryItems;
+
+    public function mount(GoogleSheetsInventoryItemService $inventoryService): void
+    {
+        $tabs = $inventoryService->getItems('wholesale');
+        $this->sourcedInventoryItems = collect($tabs)
+            ->flatMap(fn (Collection $items, string $source) =>
+                $items->map(fn (InventoryItem $item) =>
+                    SourcedInventoryItem::from($item, $source)
+                )
+            )
+            ->values();
+    }
+
+    /*
+    |------------------------------------------------------------------------
+    | Item selection
+    |------------------------------------------------------------------------
+    */
 
     public array $selectedItemsKeys = [];
 
@@ -50,7 +65,7 @@ new class extends Component {
     {
         $selectedKeys = collect($this->selectedItemsKeys)->filter()->keys()->map(fn($key) => (int) $key);
 
-        return $this->großhandelItems->only($selectedKeys);
+        return $this->sourcedInventoryItems->only($selectedKeys);
     }
 
     public function toggleSelectItem(int $itemKey): void
@@ -67,17 +82,20 @@ new class extends Component {
         $this->selectedItemsKeys = [];
     }
 
-    public function mount(GoogleSheetsInventoryItemService $inventoryService): void
-    {
-        $tabs = $inventoryService->getItems('wholesale');
-        $this->sourcedInventoryItems = collect($tabs)
-            ->flatMap(fn (Collection $items, string $source) =>
-                $items->map(fn (InventoryItem $item) =>
-                    new SourcedInventoryItem($source, $item)
-                )
-            )
-            ->values();
-    }
+    /*
+    |------------------------------------------------------------------------
+    | Search Bar and Filter
+    |------------------------------------------------------------------------
+    */
+
+    public string $searchInput = '';
+
+    public array $checkboxFilters = [
+        'nonEmpty' => true,
+        'hasKleinanzeigen' => false,
+        'hasGpu' => false,
+        'hasRetailPrice' => false,
+    ];
 
     #[Computed]
     public function filterValues(): array
@@ -91,7 +109,7 @@ new class extends Component {
     {
         /** @var list<ItemListFilter<GrosshandelItem>> $filters */
         //$filters = [app(EmptyFilter::class), app(RamFilter::class), app(SsdFilter::class), app(PriceFilter::class), app(HasRetailPriceFilter::class), app(HasKleinanzeigenFilter::class), app(HasGpuFilter::class), app(GpuFilter::class), app(LayoutFilter::class), app(SpecialsFilter::class), app(CpuFilter::class), app(DisplayNameFilter::class), app(ShelfFilter::class)];
-        $filters = [];
+        $filters  = [];
         $items = $this->sourcedInventoryItems;
 
         foreach ($filters as $filter) {
@@ -101,6 +119,12 @@ new class extends Component {
         }
         return $items;
     }
+
+    /*
+    |------------------------------------------------------------------------
+    | Item Grouping
+    |------------------------------------------------------------------------
+    */
 
     #[Computed]
     public function groupedItems(): Collection
@@ -129,10 +153,10 @@ new class extends Component {
                 && $position !== null
                 && $previousPosition !== null
                 && $position === $previousPosition + 1
-                && $this->sameProduct($currentGroup->first(), $item)
+                && $currentGroup->first()->matchesProduct($item)
                 && $this->areAdjacentShelves(
-                    $previousItem->shelf,
-                    $item->shelf
+                    $previousItem->location,
+                    $item->location
                 );
 
             if ($canJoin) {
@@ -166,74 +190,17 @@ new class extends Component {
                     'items' => $groupItems,
                     'item' => $firstItem,
                     'shelves' => $groupItems
-                        ->pluck('shelf')
-                        ->filter(fn($shelf) => $shelf !== null && $shelf !== '')
+                        ->pluck('location')
+                        ->filter(fn($location) => $location !== null && $location !== '')
                         ->values(),
 
                     // Nur der erste Eintrag enthält eine gültige Menge.
-                    'amount' => $firstItem->amount,
+                    'quantity' => $firstItem->quantity,
 
                     'grouped' => $groupItems->count() > 1,
                 ];
             })
             ->values();
-    }
-
-    /**
-     * Hersteller und Modell müssen übereinstimmen.
-     */
-
-    private function sameProduct(
-        InventoryItemLike $reference,
-        InventoryItemLike $candidate
-    ): bool {
-
-        $reference = $reference->getItem();
-        $candidate = $candidate->getItem();
-
-        // Hersteller und Modell müssen vorhanden und identisch sein.
-        foreach (['brand', 'model'] as $field) {
-            $a = strtolower(trim((string) $reference->$field));
-            $b = strtolower(trim((string) $candidate->$field));
-
-            if ($a === '' || $b === '' || $a !== $b) {
-                return false;
-            }
-        }
-
-        // Weitere Eigenschaften nur vergleichen, wenn der Folgeeintrag
-        // tatsächlich einen Wert enthält.
-        $fields = [
-            'cpu',
-            'ram',
-            'vram',
-            'storage',
-            'gpu',
-            'specials',
-            'keyboardLayout',
-            'condition',
-        ];
-
-        foreach ($fields as $field) {
-            $value = $candidate->$field;
-
-            if ($value === null || $value === '') {
-                continue;
-            }
-
-            $referenceValue = $reference->$field;
-
-            if (is_string($value) && is_string($referenceValue)) {
-                $value = strtolower(trim($value));
-                $referenceValue = strtolower(trim($referenceValue));
-            }
-
-            if ($value !== $referenceValue) {
-                return false;
-            }
-        }
-
-        return true;
     }
 
     /**
@@ -436,12 +403,12 @@ new class extends Component {
                                 {{ $item->displayName() }}
                             </span>
 
-                            {{-- Amount --}}
-                            @if ($group['amount'] !== null)
+                            {{-- Quantity --}}
+                            @if ($group['quantity'] !== null)
                             <span
                                 class="shrink-0 rounded-md bg-gray-600 px-2 py-1
                  text-xs font-bold text-white shadow-sm">
-                                x{{ $group['amount'] }}
+                                x{{ $group['quantity'] }}
                             </span>
                             @endif
 
@@ -480,9 +447,9 @@ new class extends Component {
                             </span>
                             @endif
 
-                            @if ($item->ssd)
+                            @if ($item->storage)
                             <span class="rounded bg-violet-600 px-2 py-1 font-medium text-white">
-                                {{ $item->ssd }} GB SSD
+                                {{ $item->storage }} GB SSD
                             </span>
                             @endif
 
@@ -500,9 +467,9 @@ new class extends Component {
                             @endforeach
                             @endif
 
-                            @if ($item->layout)
+                            @if ($item->keyboardLayout)
                             <span class="rounded bg-cyan-600 px-2 py-1 font-medium text-white">
-                                {{ $item->layout }}
+                                {{ $item->keyboardLayout }}
                             </span>
                             @endif
 
@@ -523,18 +490,18 @@ new class extends Component {
                                         transition hover:bg-yellow-700"
                                 title="Kleinanzeigen-Anzeige öffnen">
                                 {{ $item->kleinanzeigenId }}
-                                @if ($item->kleinanzeigenPrice)
-                                | {{ $item->kleinanzeigenPrice }}€
+                                @if ($item->retailPrice)
+                                | {{ $item->retailPrice }}€
                                 @endif
                             </a>
                             @endif
 
-                            @if ($item->kleinanzeigenPrice && !$item->kleinanzeigenId)
+                            @if ($item->retailPrice && !$item->kleinanzeigenId)
                             <span
                                 class="shrink-0 rounded-md bg-yellow-600 px-2 py-1
                                        text-xs font-bold text-white shadow-sm
                                        transition hover:bg-yellow-700">
-                                {{ $item->kleinanzeigenPrice }}€
+                                {{ $item->retailPrice }}€
                             </span>
                             @endif
 
@@ -632,14 +599,14 @@ new class extends Component {
         @endif
 
         {{--
-        public readonly ?int $shelf,
+        public readonly ?int $location,
         public readonly ?string $manufacturer,
         public readonly ?string $model,
         public readonly ?string $cpu,
         public readonly ?int $ram,
-        public readonly ?int $ssd,
+        public readonly ?int $storage,
         public readonly ?string $gpu,
-        public readonly ?int $amount,
+        public readonly ?int $quantity,
         public readonly ?string $condition,
         public readonly ?string $specials,
         public readonly ?string $layout,

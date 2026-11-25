@@ -5,7 +5,7 @@ namespace App\Data;
 use App\Concerns\Concerns\WireableArray;
 use Livewire\Wireable;
 
-class InventoryItem implements Wireable, InventoryItemLike
+class InventoryItem implements Wireable
 {
 
     // Use WireableArray trait for array serialization and deserialization
@@ -13,9 +13,8 @@ class InventoryItem implements Wireable, InventoryItemLike
 
     /**
      * Create a new class instance. This is the central definition of the InventoryItem model, encapsulating all relevant properties.
-     * Private constructor to enforce the use of the fromArray method for instantiation.
      */
-    private function __construct(
+    public function __construct(
         public readonly ?string $location,
         public readonly ?string $brand,
         public readonly ?string $model,
@@ -34,16 +33,6 @@ class InventoryItem implements Wireable, InventoryItemLike
         public readonly ?string $kleinanzeigenId,
     ) {}
 
-    /**
-     * Get the underlying InventoryItem object. This method is part of the InventoryItemLike interface, 
-     * allowing for polymorphic behavior when dealing with different types of inventory items.
-     * @return InventoryItem The inventory item, in this case, the object itself.
-     */
-    public function getItem(): InventoryItem
-    {
-        return $this;
-    }
-
     /*
     |------------------------------------------------------------------------
     | Array Serialization
@@ -53,11 +42,11 @@ class InventoryItem implements Wireable, InventoryItemLike
     /**
      * Create object from array.
      * @param array<string, mixed> $data
-     * @return self
+     * @return static the object 
      */
-    public static function fromArray(array $data): self
+    public static function fromArray(array $data): static
     {
-        return new self(
+        return new static(
             location: self::string($data['location'] ?? null),
             brand: self::string($data['brand'] ?? null),
             model: self::string($data['model'] ?? null),
@@ -141,6 +130,44 @@ class InventoryItem implements Wireable, InventoryItemLike
             $this->specials,
             $this->keyboardLayout,
         ]));
+    }
+
+    public function matchesProduct(InventoryItem $other): bool
+    {
+        // Always compare brand and model
+        foreach (['brand', 'model'] as $field) {
+            $a = self::normalize($this->$field);
+            $b = self::normalize($other->$field);
+
+            if ($a === '' || $b === '' || $a !== $b) {
+                return false;
+            }
+        }
+
+        // Compare data values if set
+        foreach (['cpu', 'ram', 'vram', 'storage', 'gpu'] as $field) {
+
+            $otherValue = self::normalize($other->$field);
+            if ($otherValue === '' || $otherValue === null) continue;
+
+            $selfValue = self::normalize($this->$field);
+
+            if ($selfValue !== $otherValue) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Normalize a value for comparison.
+     * @param mixed $value The value to normalize.
+     * @return string The normalized value.
+     */
+    private static function normalize(mixed $value): string
+    {
+        return strtolower(trim((string) $value));
     }
 
     /*
